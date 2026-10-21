@@ -1,41 +1,22 @@
-Name: mi_sampler
-
-description: "Sampler de audio para Windows"
-
+name: mi_sampler
+description: "Sampler Perreo - Banco de sonidos para DJ"
 publish_to: 'none'
-
 version: 1.0.0+1
 
-
-
 environment:
-
-sdk: '>=3.0.0 <4.0.0'
-
-
+  sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
-
-flutter:
-
-sdk: flutter
-
-audioplayers: ^6.0.0
-
-file_picker: ^8.0.0
-
-flutter_midi_command: ^0.5.4
-
-
+  flutter:
+    sdk: flutter
+  audioplayers: ^6.8.1
+  file_picker: ^8.1.7
+  flutter_midi_command: ^1.4.0
 
 dev_dependencies:
-
-flutter_test:
-
-sdk: flutter
-
-
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
 
 flutter:
-
-uses-material-design: true 
+  uses-material-design: true
