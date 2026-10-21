@@ -152,7 +152,7 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Future<void> loadSample(int index) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
           'wav',
