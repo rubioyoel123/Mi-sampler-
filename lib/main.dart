@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -13,7 +14,7 @@ class MiSamplerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mi Sampler',
+      title: 'Sampler Perreo',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: Colors.deepOrange,
@@ -27,13 +28,17 @@ class SamplePad {
   final int id;
   String name;
   String? filePath;
-  AudioPlayer player;
+  final AudioPlayer player;
 
   SamplePad({
     required this.id,
     required this.name,
     this.filePath,
   }) : player = AudioPlayer();
+
+  void dispose() {
+    player.dispose();
+  }
 }
 
 class SamplerScreen extends StatefulWidget {
@@ -46,35 +51,39 @@ class SamplerScreen extends StatefulWidget {
 class _SamplerScreenState extends State<SamplerScreen> {
   final List<SamplePad> _pads = List.generate(
     16,
-    (index) => SamplePad(id: index, name: 'Pad ${index + 1}'),
+    (index) => SamplePad(
+      id: index,
+      name: 'Pad ${index + 1}',
+    ),
   );
 
   String _status = 'Listo para cargar sonidos';
 
   @override
   void dispose() {
-    for (var pad in _pads) {
-      pad.player.dispose();
+    for (final pad in _pads) {
+      pad.dispose();
     }
     super.dispose();
   }
 
   Future<void> _loadSample(int index) async {
     try {
-      final files = await FilePicker.platform.pickFiles(
+      final FilePickerResult? result =
+          await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['wav', 'mp3', 'ogg', 'm4a', 'aac'],
       );
 
-      if (files == null || files.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-      final file = files.files.single;
-      final path = file.path;
+      final PlatformFile file = result.files.single;
+      final String? path = file.path;
 
       if (path == null) {
         if (!mounted) return;
         setState(() {
-          _status = 'No se pudo acceder al archivo';
+          _status = 'No se pudo acceder al archivo de audio';
         });
         return;
       }
@@ -86,7 +95,7 @@ class _SamplerScreenState extends State<SamplerScreen> {
         _pads[index].name = file.name;
         _status = 'Sonido cargado: ${file.name}';
       });
-    } catch (error) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _status = 'Error al cargar el sonido';
@@ -95,15 +104,29 @@ class _SamplerScreenState extends State<SamplerScreen> {
   }
 
   Future<void> _playSound(int index) async {
-    final pad = _pads[index];
-    if (pad.filePath != null) {
+    final SamplePad pad = _pads[index];
+
+    if (pad.filePath == null) {
+      await _loadSample(index);
+      return;
+    }
+
+    try {
       await pad.player.stop();
-      await pad.player.play(DeviceFileSource(pad.filePath!));
+      await pad.player.play(
+        DeviceFileSource(pad.filePath!),
+      );
+
+      if (!mounted) return;
+
       setState(() {
         _status = 'Reproduciendo: ${pad.name}';
       });
-    } else {
-      await _loadSample(index);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Error al reproducir el sonido';
+      });
     }
   }
 
@@ -111,7 +134,7 @@ class _SamplerScreenState extends State<SamplerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mi Sampler DJ'),
+        title: const Text('Sampler Perreo'),
         centerTitle: true,
         backgroundColor: Colors.black54,
       ),
@@ -123,65 +146,69 @@ class _SamplerScreenState extends State<SamplerScreen> {
             width: double.infinity,
             child: Text(
               _status,
-              style: const TextStyle(color: Colors.orangeAccent, fontSize: 14),
+              style: const TextStyle(
+                color: Colors.deepOrange,
+                fontSize: 16,
+              ),
               textAlign: TextAlign.center,
             ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(8),
               child: GridView.builder(
                 itemCount: _pads.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 4,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
-                  childAspectRatio: 1.0,
+                  childAspectRatio: 1,
                 ),
                 itemBuilder: (context, index) {
-                  final pad = _pads[index];
-                  final bool hasAudio = pad.filePath != null;
+                  final SamplePad pad = _pads[index];
+                  final bool hasSound = pad.filePath != null;
 
-                  return InkWell(
+                  return GestureDetector(
                     onTap: () => _playSound(index),
                     onLongPress: () => _loadSample(index),
-                    borderRadius: BorderRadius.circular(10),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: hasAudio ? Colors.deepOrange : Colors.grey[850],
-                        borderRadius: BorderRadius.circular(10),
+                        color: hasSound
+                            ? Colors.deepOrange
+                            : Colors.grey[850],
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: hasAudio ? Colors.orangeLight : Colors.grey[700]!,
+                          color: hasSound
+                              ? Colors.orangeAccent
+                              : Colors.grey,
                           width: 2,
                         ),
-                        boxShadow: [
-                          if (hasAudio)
-                            BoxShadow(
-                              color: Colors.deepOrange.withOpacity(0.5),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                        ],
                       ),
-                      padding: const EdgeInsets.all(8),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            hasAudio ? Icons.music_note : Icons.add,
+                            hasSound
+                                ? Icons.music_note
+                                : Icons.add_circle_outline,
+                            size: 32,
                             color: Colors.white,
-                            size: 28,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            pad.name,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                            child: Text(
+                              pad.name,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
