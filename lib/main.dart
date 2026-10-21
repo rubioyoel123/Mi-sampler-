@@ -43,7 +43,7 @@ class SamplerScreen extends StatefulWidget {
   State<SamplerScreen> createState() => _SamplerScreenState();
 }
 
-class _SamplerScreenState extends StatefulWidget {
+class _SamplerScreenState extends State<SamplerScreen> {
   final List<SamplePad> _pads = List.generate(
     16,
     (index) => SamplePad(id: index, name: 'Pad ${index + 1}'),
@@ -103,7 +103,6 @@ class _SamplerScreenState extends StatefulWidget {
         _status = 'Reproduciendo: ${pad.name}';
       });
     } else {
-      // Si el pad está vacío, al presionarlo abre el selector para cargar audio
       await _loadSample(index);
     }
   }
