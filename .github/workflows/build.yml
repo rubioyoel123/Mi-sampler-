@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
@@ -15,32 +18,33 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
+      - name: Configurar MSVC para C++
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
 
-      - name: Habilitar Windows Desktop
-        run: flutter config --enable-windows-desktop
-
-      - name: Verificar Flutter
-        run: flutter doctor -v
-
-      - name: Limpiar proyecto
-        run: flutter clean
+      - name: Comprobar archivos del proyecto
+        shell: pwsh
+        run: |
+          if (!(Test-Path "pubspec.yaml")) {
+            Write-Error "No se encontró pubspec.yaml en la raíz del repositorio."
+            exit 1
+          }
 
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Verificar código
+      - name: Analizar código
         run: flutter analyze
         continue-on-error: true
 
       - name: Compilar para Windows
         run: flutter build windows --release
 
-      - name: Guardar aplicación compilada
+      - name: Subir aplicación compilada
         uses: actions/upload-artifact@v4
         with:
           name: mi-sampler-windows
