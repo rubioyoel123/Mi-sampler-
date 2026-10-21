@@ -9,7 +9,26 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Descargar repositorio
+      uses: actions/checkout@v4
+
+    - name: Generar pubspec.yaml si falta
+      run: |
+        if (-not (Test-Path "pubspec.yaml")) {
+          @"
+        name: mi_sampler
+        description: "A new Flutter project."
+        publish_to: 'none'
+        version: 1.0.0+1
+        environment:
+          sdk: '>=3.0.0 <4.0.0'
+        dependencies:
+          flutter:
+            sdk: flutter
+        flutter:
+          uses-material-design: true
+        "@ | Out-File -FilePath pubspec.yaml -Encoding utf8
+        }
 
     - name: Configurar Flutter
       uses: subosito/flutter-action@v2
@@ -18,9 +37,6 @@ jobs:
 
     - name: Habilitar ejecutable Windows
       run: flutter config --enable-windows-desktop
-
-    - name: Obtener dependencias
-      run: flutter pub get --suppress-analytics
 
     - name: Compilar ejecutable .exe
       run: flutter build windows --release
