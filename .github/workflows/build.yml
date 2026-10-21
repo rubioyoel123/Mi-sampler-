@@ -1,4 +1,5 @@
-Name: Compilar Mi Sampler para Windows
+
+name: Compilar Sampler Perreo para Windows
 
 on:
   push:
@@ -18,35 +19,33 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar MSVC para C++
-        uses: ilammy/msvc-dev-cmd@v1
-
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Comprobar archivos del proyecto
-        shell: pwsh
-        run: |
-          if (!(Test-Path "pubspec.yaml")) {
-            Write-Error "No se encontró pubspec.yaml en la raíz del repositorio."
-            exit 1
-          }
+      - name: Habilitar Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Generar archivos de Windows
+        run: flutter create --platforms=windows .
+
+      - name: Limpiar proyecto
+        run: flutter clean
 
       - name: Instalar dependencias
         run: flutter pub get
 
       - name: Analizar código
         run: flutter analyze
-        continue-on-error: true
 
-      - name: Compilar para Windows
+      - name: Compilar Sampler Perreo
         run: flutter build windows --release
 
-      - name: Subir aplicación compilada
+      - name: Guardar aplicación compilada
         uses: actions/upload-artifact@v4
         with:
-          name: mi-sampler-windows
+          name: Sampler-Perreo-Windows
           path: build/windows/x64/runner/Release/
           if-no-files-found: error
