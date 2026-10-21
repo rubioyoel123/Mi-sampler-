@@ -20,7 +20,7 @@ jobs:
       run: flutter config --enable-windows-desktop
 
     - name: Obtener dependencias
-      run: flutter pub get
+      run: flutter pub get --suppress-analytics
 
     - name: Compilar ejecutable .exe
       run: flutter build windows --release
@@ -30,3 +30,4 @@ jobs:
       with:
         name: Sampler-Windows-EXE
         path: build/windows/runner/Release/
+        
