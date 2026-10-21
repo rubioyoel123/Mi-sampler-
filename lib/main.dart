@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(const MiSamplerApp());
@@ -20,8 +22,66 @@ class MiSamplerApp extends StatelessWidget {
   }
 }
 
-class SamplerHome extends StatelessWidget {
+class SamplerHome extends StatefulWidget {
   const SamplerHome({super.key});
+
+  @override
+  State<SamplerHome> createState() => _SamplerHomeState();
+}
+
+class _SamplerHomeState extends State<SamplerHome> {
+  final List<Map<String, dynamic>> pads = [
+    {'name': 'KICK', 'color': Colors.orange, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SNARE', 'color': Colors.orange, 'path': null, 'player': AudioPlayer()},
+    {'name': 'HI-HAT', 'color': Colors.orange, 'path': null, 'player': AudioPlayer()},
+    {'name': 'CLAP', 'color': Colors.orange, 'path': null, 'player': AudioPlayer()},
+    {'name': 'LOOP 1', 'color': Colors.blue, 'path': null, 'player': AudioPlayer()},
+    {'name': 'LOOP 2', 'color': Colors.blue, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SAMPLE 1', 'color': Colors.blue, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SAMPLE 2', 'color': Colors.blue, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SYNTH', 'color': Colors.green, 'path': null, 'player': AudioPlayer()},
+    {'name': 'BASS', 'color': Colors.green, 'path': null, 'player': AudioPlayer()},
+    {'name': 'VOX 1', 'color': Colors.green, 'path': null, 'player': AudioPlayer()},
+    {'name': 'VOX 2', 'color': Colors.green, 'path': null, 'player': AudioPlayer()},
+    {'name': 'FX 1', 'color': Colors.purpleAccent, 'path': null, 'player': AudioPlayer()},
+    {'name': 'FX 2', 'color': Colors.purpleAccent, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SHOT 1', 'color': Colors.amber, 'path': null, 'player': AudioPlayer()},
+    {'name': 'SHOT 2', 'color': Colors.amber, 'path': null, 'player': AudioPlayer()},
+  ];
+
+  @override
+  void dispose() {
+    for (var pad in pads) {
+      (pad['player'] as AudioPlayer).dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _playPad(int index) async {
+    final pad = pads[index];
+    final AudioPlayer player = pad['player'] as AudioPlayer;
+    final String? path = pad['path'] as String?;
+
+    if (path != null && path.isNotEmpty) {
+      await player.stop();
+      await player.play(DeviceFileSource(path));
+    } else {
+      await _loadAudioForPad(index);
+    }
+  }
+
+  Future<void> _loadAudioForPad(int index) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        pads[index]['path'] = result.files.single.path;
+      });
+      _playPad(index);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +116,8 @@ class SamplerHome extends StatelessWidget {
             color: const Color(0xFF121216),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerLeft,
-            child: const Text('Sampler listo', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            child: const Text('Sampler listo - Haz clic en un pad para cargar o reproducir audio',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
           ),
         ],
       ),
@@ -93,25 +154,6 @@ class SamplerHome extends StatelessWidget {
   }
 
   Widget _buildPadsGrid() {
-    final List<Map<String, dynamic>> pads = [
-      {'name': 'KICK', 'color': Colors.orange},
-      {'name': 'SNARE', 'color': Colors.orange},
-      {'name': 'HI-HAT', 'color': Colors.orange},
-      {'name': 'CLAP', 'color': Colors.orange},
-      {'name': 'LOOP 1', 'color': Colors.blue},
-      {'name': 'LOOP 2', 'color': Colors.blue},
-      {'name': 'SAMPLE 1', 'color': Colors.blue},
-      {'name': 'SAMPLE 2', 'color': Colors.blue},
-      {'name': 'SYNTH', 'color': Colors.green},
-      {'name': 'BASS', 'color': Colors.green},
-      {'name': 'VOX 1', 'color': Colors.green},
-      {'name': 'VOX 2', 'color': Colors.green},
-      {'name': 'FX 1', 'color': Colors.purpleAccent},
-      {'name': 'FX 2', 'color': Colors.purpleAccent},
-      {'name': 'SHOT 1', 'color': Colors.amber},
-      {'name': 'SHOT 2', 'color': Colors.amber},
-    ];
-
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       physics: const NeverScrollableScrollPhysics(),
@@ -126,21 +168,35 @@ class SamplerHome extends StatelessWidget {
         final item = pads[index];
         final Color col = item['color'] as Color;
         final String name = item['name'] as String;
+        final bool hasAudio = item['path'] != null;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: col.withOpacity(0.15),
-            border: Border.all(color: col, width: 2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Text(
-              name,
-              style: TextStyle(
-                color: col,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+        return InkWell(
+          onTap: () => _playPad(index),
+          onLongPress: () => _loadAudioForPad(index),
+          child: Container(
+            decoration: BoxDecoration(
+              color: hasAudio ? col.withOpacity(0.4) : col.withOpacity(0.15),
+              border: Border.all(color: col, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: col,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Icon(
+                  hasAudio ? Icons.music_note : Icons.folder_open,
+                  size: 16,
+                  color: hasAudio ? Colors.white : col.withOpacity(0.6),
+                ),
+              ],
             ),
           ),
         );
