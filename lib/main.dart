@@ -80,7 +80,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
     try {
       _midiDataSubscription =
           _midiCommand.onMidiDataReceived?.listen((event) {
-        final message = event.data;
+        final message = event;
 
         if (message.length < 3) return;
 
@@ -95,7 +95,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
       });
 
       _midiDeviceSubscription =
-          _midiCommand.onMidiDeviceChanged?.listen((_) {
+          _midiCommand.onMidiSetupChanged?.listen((_) {
         _refreshMidiDevices();
       });
 
@@ -162,7 +162,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
   Future<void> _loadSample(int index) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
           'wav',
