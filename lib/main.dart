@@ -166,18 +166,45 @@ class _SampleStateHomeState extends State<SampleStateHome> {
   }
 
   Future<void> _loadSample(int index) async {
-    try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: [
-          'wav',
-          'mp3',
-          'ogg',
-          'aac',
-          'm4a',
-        ],
-        withData: true,
-      );
+  try {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'wav',
+        'mp3',
+        'ogg',
+        'aac',
+        'm4a',
+      ],
+      withData: false,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    Uint8List? bytes = file.bytes;
+
+    if (bytes == null && file.path != null) {
+      bytes = await File(file.path!).readAsBytes();
+    }
+
+    if (bytes == null || bytes.isEmpty) {
+      _showMessage('No se pudieron leer los datos del audio.');
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      pads[index].bytes = bytes;
+      pads[index].fileName = file.name;
+      pads[index].name = file.name;
+      lastAction = 'Audio cargado en PAD ${index + 1}';
+    });
+  } catch (e) {
+    _showMessage('Error al cargar el audio: $e');
+  }
+  }
 
       if (result == null || result.files.isEmpty) return;
 
