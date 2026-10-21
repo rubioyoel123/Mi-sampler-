@@ -32,11 +32,13 @@ class SamplerStudio extends StatefulWidget {
   State<SamplerStudio> createState() => _SamplerStudioState();
 }
 
-class _SamplerStudioState extends State<SamplerStudio> {
+class _SamplerStudioState extends State<SamplerStudio> with TickerProviderStateMixin {
   final FocusNode _focusNode = FocusNode();
   final MidiCommand _midiCommand = MidiCommand();
   double masterVolume = 1.0;
   double masterPitch = 1.0;
+
+  late AnimationController _visualizerController;
 
   final List<Map<String, dynamic>> pads = [
     {'name': 'KICK', 'color': Colors.orange, 'key': '1', 'midi': 36},
@@ -66,6 +68,20 @@ class _SamplerStudioState extends State<SamplerStudio> {
       pad['active'] = false;
     }
     _initMidi();
+
+    _visualizerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _visualizerController.dispose();
+    for (var pad in pads) {
+      (pad['player'] as AudioPlayer).dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _initMidi() async {
@@ -167,37 +183,31 @@ class _SamplerStudioState extends State<SamplerStudio> {
           border: Border.all(color: Colors.white10),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Container(
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.cyan.withOpacity(0.3)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(16, (i) => Container(
-                  width: 6,
-                  height: 20.0 + (i * 3 % 10) * 8,
-                  color: Colors.cyan,
-                )),
-              ),
+            const Text(
+              'ESPECTRO CANAL L',
+              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            _buildAnimatedVisualizer(Colors.cyanAccent),
+            const Divider(color: Colors.white10, height: 20),
+            const Text(
+              'CONTROLES MAESTROS',
+              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _KnobControl(label: 'VOLUME', value: masterVolume, onChanged: (v) => masterVolume = v),
-                _KnobControl(label: 'PITCH', value: masterPitch, onChanged: (v) => masterPitch = v),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildSlider('PITCH'),
-                _buildSlider('Min'),
+                _KnobControl(
+                  label: 'VOLUME',
+                  value: masterVolume,
+                  onChanged: (v) => setState(() => masterVolume = v),
+                ),
+                _KnobControl(
+                  label: 'PITCH',
+                  value: masterPitch,
+                  onChanged: (v) => setState(() => masterPitch = v),
+                ),
               ],
             ),
           ],
@@ -206,11 +216,39 @@ class _SamplerStudioState extends State<SamplerStudio> {
     );
   }
 
+  Widget _buildAnimatedVisualizer(Color color) {
+    return Container(
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: AnimatedBuilder(
+        animation: _visualizerController,
+        builder: (context, child) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(16, (i) {
+              final waveHeight = math.sin(_visualizerController.value * 2 * math.pi + i) * 0.5 + 0.5;
+              return Container(
+                width: 6,
+                height: 20.0 + (waveHeight * 80.0),
+                color: color.withOpacity(0.85),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildPadsArea() {
     return Expanded(
-      flex: 4,
+      flex: 5,
       child: GridView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.all(12),
         physics: const NeverScrollableScrollPhysics(),
         itemCount: 16,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -227,8 +265,8 @@ class _SamplerStudioState extends State<SamplerStudio> {
 
           return GestureDetector(
             onTapDown: (_) => _playPad(index),
-            onDoubleTap: () => _loadAudio(index), 
-            onSecondaryTapDown: (_) => _loadAudio(index), 
+            onDoubleTap: () => _loadAudio(index),
+            onSecondaryTapDown: (_) => _loadAudio(index),
             onLongPress: () => _loadAudio(index),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 50),
@@ -241,13 +279,26 @@ class _SamplerStudioState extends State<SamplerStudio> {
               child: Stack(
                 children: [
                   Center(
-                    child: Text(
-                      pad['name'],
-                      style: TextStyle(
-                        color: active ? Colors.white : col,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          pad['name'],
+                          style: TextStyle(
+                            color: active ? Colors.white : col,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tecla: ${pad['key']}',
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (hasAudio)
@@ -277,61 +328,36 @@ class _SamplerStudioState extends State<SamplerStudio> {
           border: Border.all(color: Colors.white10),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            const Text(
+              'ESPECTRO CANAL R',
+              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            _buildAnimatedVisualizer(Colors.blueAccent),
+            const Divider(color: Colors.white10, height: 20),
+            const Text(
+              'ESTADO DEL TEMPO',
+              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
             Container(
-              height: 100,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.black,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
               ),
-              child: const Center(child: Icon(Icons.graphic_eq, color: Colors.blueAccent, size: 50)),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _KnobControl(label: 'REVERB', value: 0.2, onChanged: (v){}),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
-                  child: const Text('128.0', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _KnobControl(label: 'DELAY', value: 0.1, onChanged: (v){}),
-                _KnobControl(label: 'FILTER', value: 0.5, onChanged: (v){}),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _KnobControl(label: 'AUDIO', value: 0.8, onChanged: (v){}),
-                _KnobControl(label: 'GCPP', value: 0.3, onChanged: (v){}),
-              ],
+              child: Column(
+                children: const [
+                  Text('128.0', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 2),
+                  Text('BPM', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSlider(String label) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 100,
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Slider(value: 0.7, onChanged: (v){}, activeColor: Colors.blue, inactiveColor: Colors.white12),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-      ],
     );
   }
 
@@ -347,7 +373,16 @@ class _SamplerStudioState extends State<SamplerStudio> {
           Row(
             children: [
               const Text('CPU/memoria ', style: TextStyle(color: Colors.white54, fontSize: 11)),
-              Container(width: 50, height: 8, color: Colors.blueGrey[900], child: FractionallySizedBox(alignment: Alignment.centerLeft, widthFactor: 0.3, child: Container(color: Colors.blueAccent))),
+              Container(
+                width: 50,
+                height: 8,
+                color: Colors.blueGrey[900],
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 0.3,
+                  child: Container(color: Colors.blueAccent),
+                ),
+              ),
             ],
           )
         ],
@@ -391,7 +426,8 @@ class _KnobControlState extends State<_KnobControl> {
           child: Transform.rotate(
             angle: (_currentValue * 2 * math.pi) - math.pi,
             child: Container(
-              width: 45, height: 45,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF282833),
@@ -400,13 +436,21 @@ class _KnobControlState extends State<_KnobControl> {
               ),
               child: Align(
                 alignment: Alignment.topCenter,
-                child: Container(margin: const EdgeInsets.only(top: 4), width: 3, height: 10, color: Colors.blueAccent),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  width: 3,
+                  height: 12,
+                  color: Colors.blueAccent,
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(widget.label, style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(
+          widget.label,
+          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
       ],
     );
   }
