@@ -1,4 +1,4 @@
-ñ
+
 name: Compilar para Windows
 
 on:
@@ -25,38 +25,33 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verificar Flutter
-        run: flutter doctor -v
+      - name: Verificar proyecto
+        shell: pwsh
+        run: |
+          if (!(Test-Path "pubspec.yaml")) {
+            throw "Falta pubspec.yaml"
+          }
+          if (!(Test-Path "lib/main.dart")) {
+            throw "Falta lib/main.dart"
+          }
 
       - name: Habilitar Windows Desktop
         run: flutter config --enable-windows-desktop
 
-      - name: Comprobar estructura del proyecto
+      - name: Preparar plataforma Windows
         shell: pwsh
         run: |
-          if (!(Test-Path "pubspec.yaml")) {
-            throw "No existe pubspec.yaml en la raíz del repositorio."
-          }
-
-          if (!(Test-Path "lib/main.dart")) {
-            throw "No existe lib/main.dart."
-          }
-
           if (!(Test-Path "windows/CMakeLists.txt")) {
             flutter create --platforms=windows .
           }
 
-      - name: Obtener dependencias
+      - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Analizar código
-        run: flutter analyze
-        continue-on-error: true
-
-      - name: Compilar para Windows
+      - name: Compilar aplicación
         run: flutter build windows --release
 
-      - name: Subir ejecutable y dependencias
+      - name: Subir aplicación compilada
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Windows-Release
