@@ -78,12 +78,11 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
   Future<void> _initMidi() async {
     try {
-      _midiDataSubscription =
-          _midiCommand.onMidiDataReceived?.listen((event) {
-        final message = event;
+  
 
-        if (message.length < 3) return;
+      _midiDataSubscription = _midiCommand.onMidiDataReceived!.listen((event) {
 
+          final message = event.data;
         final status = message[0] & 0xF0;
         final note = message[1];
         final velocity = message[2];
