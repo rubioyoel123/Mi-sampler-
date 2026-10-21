@@ -2,11 +2,11 @@
 name: Compilar Sampler Perreo
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
       - master
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,20 +23,18 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Activar Windows
+      - name: Activar Windows Desktop
         run: flutter config --enable-windows-desktop
-
-      - name: Verificar Flutter
-        run: flutter doctor -v
 
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar aplicación
+      - name: Compilar Sampler Perreo
         run: flutter build windows --release
 
-      - name: Guardar aplicación
+      - name: Guardar compilacion
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Perreo-Windows
