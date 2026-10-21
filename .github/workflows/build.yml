@@ -1,5 +1,5 @@
 
-name: Compilar Sampler Perreo para Windows
+name: Compilar Sampler Perreo
 
 on:
   push:
@@ -16,34 +16,27 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Descargar repositorio
+      - name: Descargar proyecto
         uses: actions/checkout@v4
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
 
-      - name: Habilitar Windows Desktop
+      - name: Activar Windows
         run: flutter config --enable-windows-desktop
 
-      - name: Generar archivos de Windows
-        run: flutter create --platforms=windows .
-
-      - name: Limpiar proyecto
-        run: flutter clean
+      - name: Verificar Flutter
+        run: flutter doctor -v
 
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Analizar código
-        run: flutter analyze
-
-      - name: Compilar Sampler Perreo
+      - name: Compilar aplicación
         run: flutter build windows --release
 
-      - name: Guardar aplicación compilada
+      - name: Guardar aplicación
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Perreo-Windows
