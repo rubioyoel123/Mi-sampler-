@@ -161,7 +161,6 @@ class _SamplerHomeState extends State<SamplerHome> {
           'm4a',
           'aac',
         ],
-        withData: true,
       );
 
       if (result == null || result.files.isEmpty) return;
