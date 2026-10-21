@@ -1,0 +1,33 @@
+name: Compilar para Windows
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configurar Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    - name: Habilitar ejecutable Windows
+      run: flutter config --enable-windows-desktop
+
+    - name: Obtener dependencias
+      run: flutter pub get
+
+    - name: Compilar ejecutable .exe
+      run: flutter build windows --release
+
+    - name: Subir instalador como artefacto
+      uses: actions/upload-artifact@v3
+      with:
+        name: Sampler-Windows-EXE
+        path: build/windows/runner/Release/
+        
