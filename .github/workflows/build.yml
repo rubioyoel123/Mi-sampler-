@@ -25,18 +25,16 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verificar Flutter
-        run: flutter doctor -v
-
       - name: Activar Windows Desktop
         run: flutter config --enable-windows-desktop
 
-      - name: Verificar proyecto Flutter
+      - name: Crear archivos de Windows
         shell: pwsh
         run: |
-          if (!(Test-Path "pubspec.yaml")) {
-            Write-Error "No se encuentra pubspec.yaml en la raiz del proyecto."
-            exit 1
+          if (!(Test-Path "windows/CMakeLists.txt")) {
+            flutter create --platforms=windows .
+          } else {
+            Write-Host "Los archivos de Windows ya existen."
           }
 
       - name: Instalar dependencias
