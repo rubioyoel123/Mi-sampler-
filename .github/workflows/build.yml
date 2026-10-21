@@ -1,49 +1,65 @@
+ñ
 name: Compilar para Windows
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Descargar repositorio
-      uses: actions/checkout@v4
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
 
-    - name: Generar pubspec.yaml si falta
-      run: |
-        if (-not (Test-Path "pubspec.yaml")) {
-          @"
-        name: mi_sampler
-        description: "A new Flutter project."
-        publish_to: 'none'
-        version: 1.0.0+1
-        environment:
-          sdk: '>=3.0.0 <4.0.0'
-        dependencies:
-          flutter:
-            sdk: flutter
-        flutter:
-          uses-material-design: true
-        "@ | Out-File -FilePath pubspec.yaml -Encoding utf8
-        }
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-    - name: Configurar Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        channel: 'stable'
+      - name: Verificar Flutter
+        run: flutter doctor -v
 
-    - name: Habilitar ejecutable Windows
-      run: flutter config --enable-windows-desktop
+      - name: Habilitar Windows Desktop
+        run: flutter config --enable-windows-desktop
 
-    - name: Compilar ejecutable .exe
-      run: flutter build windows --release
+      - name: Comprobar estructura del proyecto
+        shell: pwsh
+        run: |
+          if (!(Test-Path "pubspec.yaml")) {
+            throw "No existe pubspec.yaml en la raíz del repositorio."
+          }
 
-    - name: Subir instalador como artefacto
-      uses: actions/upload-artifact@v4
-      with:
-        name: Sampler-Windows-EXE
-        path: build/windows/runner/Release/
-        
+          if (!(Test-Path "lib/main.dart")) {
+            throw "No existe lib/main.dart."
+          }
+
+          if (!(Test-Path "windows/CMakeLists.txt")) {
+            flutter create --platforms=windows .
+          }
+
+      - name: Obtener dependencias
+        run: flutter pub get
+
+      - name: Analizar código
+        run: flutter analyze
+        continue-on-error: true
+
+      - name: Compilar para Windows
+        run: flutter build windows --release
+
+      - name: Subir ejecutable y dependencias
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sampler-Windows-Release
+          path: build/windows/x64/runner/Release/
+          if-no-files-found: error
+          
