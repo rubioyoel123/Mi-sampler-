@@ -82,7 +82,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
       _midiDataSubscription = _midiCommand.onMidiDataReceived!.listen((event) {
 
-          final message = event.data;
+          final message = event;
         final status = message[0] & 0xF0;
         final note = message[1];
         final velocity = message[2];
