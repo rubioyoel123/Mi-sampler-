@@ -39,26 +39,22 @@ class _SamplerStudioState extends State<SamplerStudio> {
   double masterPitch = 1.0;
 
   final List<Map<String, dynamic>> pads = [
-    // Fila 1 (Naranja)
     {'name': 'KICK', 'color': Colors.orange, 'key': '1', 'midi': 36},
     {'name': 'SNARE', 'color': Colors.orange, 'key': '2', 'midi': 37},
     {'name': 'HI-HAT', 'color': Colors.orange, 'key': '3', 'midi': 38},
     {'name': 'CLAP', 'color': Colors.orange, 'key': '4', 'midi': 39},
-    // Fila 2 (Azul)
     {'name': 'LOOP 1', 'color': Colors.blue, 'key': 'Q', 'midi': 40},
     {'name': 'LOOP 2', 'color': Colors.blue, 'key': 'W', 'midi': 41},
-    {'name': '', 'color': Colors.blueAccent, 'key': 'E', 'midi': 42},
-    {'name': '', 'color': Colors.greenAccent, 'key': 'R', 'midi': 43},
-    // Fila 3 (Verde)
+    {'name': 'SAMPLE 1', 'color': Colors.blueAccent, 'key': 'E', 'midi': 42},
+    {'name': 'SAMPLE 2', 'color': Colors.greenAccent, 'key': 'R', 'midi': 43},
     {'name': 'SYNTH', 'color': Colors.green, 'key': 'A', 'midi': 44},
     {'name': 'BASS', 'color': Colors.green, 'key': 'S', 'midi': 45},
-    {'name': '', 'color': Colors.green, 'key': 'D', 'midi': 46},
-    {'name': 'VOX 1', 'color': Colors.green, 'key': 'F', 'midi': 47},
-    // Fila 4 (Morado y Amarillo)
+    {'name': 'VOX 1', 'color': Colors.green, 'key': 'D', 'midi': 46},
+    {'name': 'VOX 2', 'color': Colors.green, 'key': 'F', 'midi': 47},
     {'name': 'FX 1', 'color': Colors.purpleAccent, 'key': 'Z', 'midi': 48},
     {'name': 'FX 2', 'color': Colors.purpleAccent, 'key': 'X', 'midi': 49},
     {'name': 'SHOT 1', 'color': Colors.amber, 'key': 'C', 'midi': 50},
-    {'name': '', 'color': Colors.amber, 'key': 'V', 'midi': 51},
+    {'name': 'SHOT 2', 'color': Colors.amber, 'key': 'V', 'midi': 51},
   ];
 
   @override
@@ -77,7 +73,6 @@ class _SamplerStudioState extends State<SamplerStudio> {
     if (devices != null && devices.isNotEmpty) {
       _midiCommand.connectToDevice(devices.first);
       _midiCommand.onMidiDataReceived?.listen((event) {
-        // Evento Note On
         if (event.data[0] == 144 && event.data[2] > 0) {
           int note = event.data[1];
           int padIndex = pads.indexWhere((p) => p['midi'] == note);
@@ -232,25 +227,36 @@ class _SamplerStudioState extends State<SamplerStudio> {
 
           return GestureDetector(
             onTapDown: (_) => _playPad(index),
-            onSecondaryTap: () => _loadAudio(index),
+            onDoubleTap: () => _loadAudio(index), 
+            onSecondaryTapDown: (_) => _loadAudio(index), 
             onLongPress: () => _loadAudio(index),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 100),
+              duration: const Duration(milliseconds: 50),
               decoration: BoxDecoration(
-                color: active ? col.withOpacity(0.8) : col.withOpacity(hasAudio ? 0.2 : 0.05),
+                color: active ? col.withOpacity(0.8) : col.withOpacity(hasAudio ? 0.25 : 0.05),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: active ? Colors.white : col, width: 2),
                 boxShadow: active ? [BoxShadow(color: col, blurRadius: 15, spreadRadius: 2)] : [],
               ),
-              child: Center(
-                child: Text(
-                  pad['name'],
-                  style: TextStyle(
-                    color: active ? Colors.white : col,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+              child: Stack(
+                children: [
+                  Center(
+                    child: Text(
+                      pad['name'],
+                      style: TextStyle(
+                        color: active ? Colors.white : col,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                ),
+                  if (hasAudio)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(Icons.music_note, size: 12, color: col.withOpacity(0.8)),
+                    ),
+                ],
               ),
             ),
           );
@@ -280,7 +286,7 @@ class _SamplerStudioState extends State<SamplerStudio> {
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
               ),
-              child: Center(child: Icon(Icons.graphic_eq, color: Colors.blueAccent, size: 50)),
+              child: const Center(child: Icon(Icons.graphic_eq, color: Colors.blueAccent, size: 50)),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -337,7 +343,7 @@ class _SamplerStudioState extends State<SamplerStudio> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('Clic derecho o presionar largo para cargar sample', style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Text('DOBLE CLIC izquierdo o CLIC DERECHO para cargar un sonido', style: TextStyle(color: Colors.white54, fontSize: 11)),
           Row(
             children: [
               const Text('CPU/memoria ', style: TextStyle(color: Colors.white54, fontSize: 11)),
