@@ -1,9 +1,11 @@
-import 'dart:typed_data';
 import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
+import 'package:flutter_midi_command/flutter_midi_command_messages.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,18 +46,18 @@ class SampleStateHome extends StatefulWidget {
   const SampleStateHome({super.key});
 
   @override
-  State<SampleStateHome> createState() =>
-      _SampleStateHomeState();
+  State<SampleStateHome> createState() => _SampleStateHomeState();
 }
 
 class _SampleStateHomeState extends State<SampleStateHome> {
   final MidiCommand _midiCommand = MidiCommand();
 
-  final int samplePadNumber = 12;
+  static const int samplePadNumber = 12;
+
   late final List<SamplePad> pads;
 
-  StreamSubscription<dynamic>? _midiDataSubscription;
-  StreamSubscription<dynamic>? _midiDeviceSubscription;
+  StreamSubscription<MidiDataReceivedEvent>? _midiDataSubscription;
+  StreamSubscription<MidiSetupChange>? _midiDeviceSubscription;
 
   List<MidiDevice> devices = [];
   MidiDevice? selectedDevice;
@@ -78,17 +80,12 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
   Future<void> _initMidi() async {
     try {
-  
+      _midiDataSubscription =
+          _midiCommand.onMidiDataReceived?.listen((event) {
+        final message = event.message;
 
-      _midiDataSubscription = _midiCommand.onMidiDataReceived!.listen((event) {
-
-          final message = event;
-        final status = message[0] & 0xF0;
-        final note = message[1];
-        final velocity = message[2];
-
-        if (status == 0x90 && velocity > 0) {
-          final index = note % samplePadNumber;
+        if (message is NoteOnMessage && message.velocity > 0) {
+          final index = message.note % samplePadNumber;
           _playPadSound(index);
         }
       });
@@ -111,7 +108,9 @@ class _SampleStateHomeState extends State<SampleStateHome> {
   Future<void> _refreshMidiDevices() async {
     if (!mounted) return;
 
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+    });
 
     try {
       final result = await _midiCommand.devices;
@@ -120,13 +119,20 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
       setState(() {
         devices = result ?? [];
+
+        if (selectedDevice != null &&
+            !devices.any((d) => d.id == selectedDevice!.id)) {
+          selectedDevice = null;
+        }
+
         isLoading = false;
 
         if (devices.isEmpty) {
           selectedDevice = null;
           midiStatus = 'No se encontraron dispositivos MIDI';
         } else {
-          midiStatus = 'Dispositivos MIDI encontrados: ${devices.length}';
+          midiStatus =
+              'Dispositivos MIDI encontrados: ${devices.length}';
         }
       });
     } catch (e) {
@@ -134,7 +140,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
       setState(() {
         isLoading = false;
-        midiStatus = 'Error al buscar dispositivos MIDI';
+        midiStatus = 'Error al buscar dispositivos MIDI: $e';
       });
     }
   }
@@ -154,7 +160,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
       if (!mounted) return;
 
       setState(() {
-        midiStatus = 'No se pudo conectar al controlador MIDI';
+        midiStatus = 'No se pudo conectar al controlador MIDI: $e';
       });
     }
   }
@@ -214,10 +220,7 @@ class _SampleStateHomeState extends State<SampleStateHome> {
 
     try {
       await pad.player.stop();
-
-      await pad.player.play(
-        BytesSource(bytes),
-      );
+      await pad.player.play(BytesSource(bytes));
 
       if (!mounted) return;
 
@@ -316,8 +319,12 @@ class _SampleStateHomeState extends State<SampleStateHome> {
                       Expanded(
                         child: DropdownButton<MidiDevice>(
                           isExpanded: true,
-                          value: devices.contains(selectedDevice)
-                              ? selectedDevice
+                          value: devices.any(
+                            (d) => d.id == selectedDevice?.id,
+                          )
+                              ? devices.firstWhere(
+                                  (d) => d.id == selectedDevice!.id,
+                                )
                               : null,
                           hint: const Text('Seleccionar MIDI'),
                           items: devices.map((device) {
