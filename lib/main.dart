@@ -1,138 +1,147 @@
-
 import 'dart:async';
-import 'dart:typed_data';
-
+import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
-import 'package:flutter_midi_command/flutter_midi_command_messages.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SamplerPerroApp());
+  runApp(const SamplePadApp());
 }
 
-class SamplerPerroApp extends StatelessWidget {
-  const SamplerPerroApp({super.key});
+class SamplePadApp extends StatelessWidget {
+  const SamplePadApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sampler Perro PRO',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF101116),
+      title: 'Sampler Para PRO',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFFFF315),
-          secondary: Color(0xFFFFF315),
+          primary: Color(0xFF00FFE0),
+          secondary: Color(0xFF9900FF),
         ),
       ),
-      home: const SamplerHome(),
+      home: const SampleStateHome(),
     );
   }
 }
 
-class SamplerPad {
-  SamplerPad(int number)
-      : name = 'PAD $number';
-
+class SamplePad {
   String name;
-  Uint8List? audioBytes;
+  Uint8List? bytes;
   String? fileName;
-  bool active = false;
   final AudioPlayer player = AudioPlayer();
+
+  SamplePad({required this.name});
 }
 
-class SamplerHome extends StatefulWidget {
-  const SamplerHome({super.key});
+class SampleStateHome extends StatefulWidget {
+  const SampleStateHome({super.key});
 
   @override
-  State<SamplerHome> createState() => _SamplerHomeState();
+  State<SampleStateHome> createState() =>
+      _SampleStateHomeState();
 }
 
-class _SamplerHomeState extends State<SamplerHome> {
-  final MidiCommand midi = MidiCommand();
+class _SampleStateHomeState extends State<SampleStateHome> {
+  final MidiCommand _midiCommand = MidiCommand();
 
-  late final List<SamplerPad> pads =
-      List.generate(16, (index) => SamplerPad(index + 1));
+  final int samplePadNumber = 12;
+  late final List<SamplePad> pads;
 
-  StreamSubscription<MidiDataReceivedEvent>? midiSubscription;
-  StreamSubscription<MidiSetupChange>? setupSubscription;
+  StreamSubscription<dynamic>? _midiDataSubscription;
+  StreamSubscription<dynamic>? _midiDeviceSubscription;
 
   List<MidiDevice> devices = [];
   MidiDevice? selectedDevice;
 
   String midiStatus = 'MIDI desconectado';
   String lastAction = 'Carga un sonido para comenzar';
-  bool loadingMidi = false;
-  bool stopping = false;
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    initializeMidi();
+
+    pads = List.generate(
+      samplePadNumber,
+      (index) => SamplePad(name: 'PAD ${index + 1}'),
+    );
+
+    _initMidi();
   }
 
-  Future<void> initializeMidi() async {
-    midiSubscription = midi.onMidiDataReceived?.listen((event) {
-      final message = event.message;
-
-      if (message is NoteOnMessage && message.velocity > 0) {
-        final index = message.note - 36;
-
-        if (index >= 0 && index < pads.length) {
-          playPad(index);
-        }
-      }
-    });
-
-    setupSubscription = midi.onMidiSetupChanged?.listen((_) {
-      refreshMidiDevices();
-    });
-
-    await refreshMidiDevices();
-  }
-
-  Future<void> refreshMidiDevices() async {
-    if (!mounted) return;
-
-    setState(() {
-      loadingMidi = true;
-    });
-
+  Future<void> _initMidi() async {
     try {
-      final found = await midi.devices ?? <MidiDevice>[];
+      _midiDataSubscription =
+          _midiCommand.onMidiDataReceived?.listen((event) {
+        final message = event.data;
 
-      if (!mounted) return;
+        if (message.length < 3) return;
 
-      setState(() {
-        devices = found;
-        loadingMidi = false;
+        final status = message[0] & 0xF0;
+        final note = message[1];
+        final velocity = message[2];
 
-        if (selectedDevice != null &&
-            !devices.any((d) => d.id == selectedDevice!.id)) {
-          selectedDevice = null;
-          midiStatus = 'Controlador desconectado';
-        } else if (devices.isEmpty && selectedDevice == null) {
-          midiStatus = 'No se encontraron dispositivos MIDI';
-        } else if (selectedDevice == null) {
-          midiStatus = 'Dispositivo MIDI disponible';
+        if (status == 0x90 && velocity > 0) {
+          final index = note % samplePadNumber;
+          _playPadSound(index);
         }
       });
-    } catch (_) {
+
+      _midiDeviceSubscription =
+          _midiCommand.onMidiDeviceChanged?.listen((_) {
+        _refreshMidiDevices();
+      });
+
+      await _refreshMidiDevices();
+    } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        loadingMidi = false;
+        midiStatus = 'Error al iniciar MIDI: $e';
+      });
+    }
+  }
+
+  Future<void> _refreshMidiDevices() async {
+    if (!mounted) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final result = await _midiCommand.devices;
+
+      if (!mounted) return;
+
+      setState(() {
+        devices = result ?? [];
+        isLoading = false;
+
+        if (devices.isEmpty) {
+          selectedDevice = null;
+          midiStatus = 'No se encontraron dispositivos MIDI';
+        } else {
+          midiStatus = 'Dispositivos MIDI encontrados: ${devices.length}';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
         midiStatus = 'Error al buscar dispositivos MIDI';
       });
     }
   }
 
-  Future<void> connectMidi(MidiDevice device) async {
+  Future<void> _connectMidiDevice(MidiDevice device) async {
     try {
-      await midi.connectToDevice(device);
+      await _midiCommand.connectToDevice(device);
 
       if (!mounted) return;
 
@@ -141,26 +150,27 @@ class _SamplerHomeState extends State<SamplerHome> {
         midiStatus = 'Conectado: ${device.name}';
         lastAction = 'Controlador MIDI conectado';
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        midiStatus = 'No se pudo conectar al controlador';
+        midiStatus = 'No se pudo conectar al controlador MIDI';
       });
     }
   }
 
-  Future<void> loadSample(int index) async {
+  Future<void> _loadSample(int index) async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
           'wav',
           'mp3',
           'ogg',
-          'm4a',
           'aac',
+          'm4a',
         ],
+        withData: true,
       );
 
       if (result == null || result.files.isEmpty) return;
@@ -169,40 +179,28 @@ class _SamplerHomeState extends State<SamplerHome> {
       final bytes = file.bytes;
 
       if (bytes == null || bytes.isEmpty) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudieron leer los datos del audio.'),
-          ),
-        );
+        _showMessage('No se pudieron leer los datos del audio.');
         return;
       }
 
       if (!mounted) return;
 
       setState(() {
-        pads[index].audioBytes = bytes;
+        pads[index].bytes = bytes;
         pads[index].fileName = file.name;
         pads[index].name = file.name;
         lastAction = 'Audio cargado en PAD ${index + 1}';
       });
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al cargar el audio: $error'),
-        ),
-      );
+    } catch (e) {
+      _showMessage('Error al cargar el audio: $e');
     }
   }
 
-  Future<void> playPad(int index) async {
+  Future<void> _playPadSound(int index) async {
     if (index < 0 || index >= pads.length) return;
 
     final pad = pads[index];
-    final bytes = pad.audioBytes;
+    final bytes = pad.bytes;
 
     if (bytes == null || bytes.isEmpty) {
       if (!mounted) return;
@@ -211,64 +209,54 @@ class _SamplerHomeState extends State<SamplerHome> {
         lastAction = 'Primero carga un sonido en PAD ${index + 1}';
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Carga un sonido en PAD ${index + 1}.'),
-        ),
-      );
       return;
-    }
-
-    if (mounted) {
-      setState(() {
-        pad.active = true;
-        lastAction = 'Reproduciendo: ${pad.fileName ?? pad.name}';
-      });
     }
 
     try {
       await pad.player.stop();
-      await pad.player.play(BytesSource(bytes));
-    } catch (_) {
+
+      await pad.player.play(
+        BytesSource(bytes),
+      );
+
       if (!mounted) return;
 
       setState(() {
-        pad.active = false;
-        lastAction = 'No se pudo reproducir el audio';
+        lastAction = 'Reproduciendo: ${pad.name}';
       });
+    } catch (e) {
+      _showMessage('Error al reproducir el audio: $e');
     }
   }
 
-  Future<void> stopAll() async {
-    if (stopping) return;
-
-    setState(() {
-      stopping = true;
-    });
-
-    try {
-      for (final pad in pads) {
+  Future<void> _stopAll() async {
+    for (final pad in pads) {
+      try {
         await pad.player.stop();
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          for (final pad in pads) {
-            pad.active = false;
-          }
-
-          stopping = false;
-          lastAction = 'Todos los sonidos detenidos';
-        });
+      } catch (_) {
+        // Continúa deteniendo los demás pads.
       }
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      lastAction = 'Todos los sonidos detenidos';
+    });
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   void dispose() {
-    midiSubscription?.cancel();
-    setupSubscription?.cancel();
-    midi.dispose();
+    _midiDataSubscription?.cancel();
+    _midiDeviceSubscription?.cancel();
 
     for (final pad in pads) {
       pad.player.dispose();
@@ -281,16 +269,22 @@ class _SamplerHomeState extends State<SamplerHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF191B22),
         title: const Text(
-          'SAMPLER PERRO PRO',
+          'SAMPLER PARA PRO',
           style: TextStyle(
-            color: Color(0xFFFFF315),
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
           ),
         ),
         centerTitle: true,
+        backgroundColor: const Color(0xFF111827),
+        actions: [
+          IconButton(
+            tooltip: 'Actualizar MIDI',
+            onPressed: _refreshMidiDevices,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -300,131 +294,87 @@ class _SamplerHomeState extends State<SamplerHome> {
               margin: const EdgeInsets.all(12),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1B1D25),
+                color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color(0xFF363944),
+                  color: const Color(0xFF00FFE0),
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'PANEL DE CONTROL',
-                    style: TextStyle(
-                      color: Color(0xFFFFF315),
+                  Text(
+                    midiStatus,
+                    style: const TextStyle(
+                      color: Color(0xFF00FFE0),
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    lastAction,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    midiStatus,
-                    style: TextStyle(
-                      color: selectedDevice == null
-                          ? Colors.white60
-                          : const Color(0xFF65E69A),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed:
-                              loadingMidi ? null : refreshMidiDevices,
-                          icon: loadingMidi
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.refresh),
-                          label: const Text('BUSCAR MIDI'),
+                        child: DropdownButton<MidiDevice>(
+                          isExpanded: true,
+                          value: devices.contains(selectedDevice)
+                              ? selectedDevice
+                              : null,
+                          hint: const Text('Seleccionar MIDI'),
+                          items: devices.map((device) {
+                            return DropdownMenuItem<MidiDevice>(
+                              value: device,
+                              child: Text(
+                                device.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (device) {
+                            if (device != null) {
+                              _connectMidiDevice(device);
+                            }
+                          },
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFFF315),
-                            foregroundColor: Colors.black,
-                          ),
-                          onPressed: stopping ? null : stopAll,
-                          icon: const Icon(Icons.stop_circle),
-                          label: const Text(
-                            'DETENER TODO',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                      if (isLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
-                  if (devices.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<MidiDevice>(
-                      value: selectedDevice,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Controlador MIDI',
-                        border: OutlineInputBorder(),
-                      ),
-                      hint: const Text('Selecciona un dispositivo'),
-                      items: devices.map((device) {
-                        return DropdownMenuItem<MidiDevice>(
-                          value: device,
-                          child: Text(
-                            device.name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (device) {
-                        if (device != null) {
-                          connectMidi(device);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Notas MIDI 36 a 51 activan los pads 1 a 16.',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Text(
-                    'TUS 16 PADS',
-                    style: TextStyle(
-                      color: Color(0xFFFFF315),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  const Icon(
+                    Icons.graphic_eq,
+                    color: Color(0xFF00FFE0),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      lastAction,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Spacer(),
-                  Text(
-                    'CARGAR Y REPRODUCIR',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
+                  IconButton(
+                    tooltip: 'Detener todos los sonidos',
+                    onPressed: _stopAll,
+                    icon: const Icon(
+                      Icons.stop_circle,
+                      color: Colors.redAccent,
+                      size: 30,
                     ),
                   ),
                 ],
@@ -433,98 +383,83 @@ class _SamplerHomeState extends State<SamplerHome> {
             const SizedBox(height: 8),
             Expanded(
               child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                padding: const EdgeInsets.all(12),
+                itemCount: pads.length,
                 gridDelegate:
                     const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 0.78,
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.92,
                 ),
-                itemCount: pads.length,
                 itemBuilder: (context, index) {
                   final pad = pads[index];
-                  final hasAudio = pad.audioBytes != null;
+                  final loaded = pad.bytes != null;
 
                   return Material(
-                    color: pad.active
-                        ? const Color(0xFFFFF315)
-                        : const Color(0xFF22252E),
-                    borderRadius: BorderRadius.circular(12),
+                    color: loaded
+                        ? const Color(0xFF3B1764)
+                        : const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(16),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => playPad(index),
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => _playPadSound(index),
+                      onLongPress: () => _loadSample(index),
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: pad.active
-                                ? const Color(0xFFFFF315)
-                                : const Color(0xFF414552),
-                            width: pad.active ? 2 : 1,
+                            color: loaded
+                                ? const Color(0xFF00FFE0)
+                                : const Color(0xFF475569),
+                            width: loaded ? 2 : 1,
                           ),
                         ),
-                        padding: const EdgeInsets.all(5),
+                        padding: const EdgeInsets.all(8),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              hasAudio
+                              loaded
                                   ? Icons.graphic_eq
                                   : Icons.add_circle_outline,
-                              size: 27,
-                              color: pad.active
-                                  ? Colors.black
-                                  : const Color(0xFFFFF315),
+                              size: 32,
+                              color: loaded
+                                  ? const Color(0xFF00FFE0)
+                                  : Colors.white70,
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(height: 8),
                             Text(
                               'PAD ${index + 1}',
-                              style: TextStyle(
-                                color: pad.active
-                                    ? Colors.black
-                                    : Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              hasAudio ? 'CARGADO' : 'VACÍO',
-                              style: TextStyle(
-                                color: pad.active
-                                    ? Colors.black87
-                                    : Colors.white54,
-                                fontSize: 9,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
                             ),
                             const SizedBox(height: 5),
+                            Text(
+                              loaded ? pad.name : 'Vacío',
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
+                                onPressed: () => _loadSample(index),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 2,
+                                    horizontal: 4,
                                     vertical: 2,
                                   ),
-                                  minimumSize: const Size(0, 28),
-                                  foregroundColor: pad.active
-                                      ? Colors.black
-                                      : const Color(0xFFFFF315),
-                                  side: BorderSide(
-                                    color: pad.active
-                                        ? Colors.black54
-                                        : const Color(0xFFFFF315),
-                                  ),
+                                  foregroundColor:
+                                      const Color(0xFF00FFE0),
                                 ),
-                                onPressed: () => loadSample(index),
                                 child: const Text(
                                   'CARGAR',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: TextStyle(fontSize: 11),
                                 ),
                               ),
                             ),
@@ -534,6 +469,17 @@ class _SamplerHomeState extends State<SamplerHome> {
                     ),
                   );
                 },
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                'Toca un PAD para reproducir • Pulsa CARGAR para elegir un audio',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white60,
+                  fontSize: 11,
+                ),
               ),
             ),
           ],
