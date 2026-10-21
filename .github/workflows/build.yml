@@ -12,12 +12,12 @@ permissions:
   contents: read
 
 jobs:
-  build-windows:
-    name: Compilar para Windows
+  build:
+    name: Compilar aplicación
     runs-on: windows-latest
 
     steps:
-      - name: Descargar codigo
+      - name: Descargar código
         uses: actions/checkout@v4
 
       - name: Instalar Flutter
@@ -26,24 +26,28 @@ jobs:
           channel: stable
 
       - name: Verificar Flutter
-        run: flutter --version
+        run: flutter doctor -v
 
       - name: Habilitar Windows
         run: flutter config --enable-windows-desktop
 
+      - name: Crear archivos de Windows si faltan
+        shell: pwsh
+        run: |
+          if (!(Test-Path "windows/CMakeLists.txt")) {
+            flutter create --platforms=windows --project-name=sampler_perreo_pro .
+          }
+
       - name: Descargar dependencias
         run: flutter pub get
 
-      - name: Revisar codigo
-        run: flutter analyze
-        continue-on-error: true
-
-      - name: Compilar aplicacion
+      - name: Compilar aplicación
         run: flutter build windows --release
 
-      - name: Publicar programa compilado
+      - name: Guardar aplicación compilada
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Perreo-PRO-Windows
           path: build/windows/x64/runner/Release/
           if-no-files-found: error
+
