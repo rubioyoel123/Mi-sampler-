@@ -1,8 +1,8 @@
+import 'package:flutter_midi_command/flutter_midi_command.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_midi_command/flutter_midi_command.dart';
 import 'dart:math' as math;
 
 void main() {
@@ -37,7 +37,13 @@ class _SamplerStudioState extends State<SamplerStudio> with TickerProviderStateM
   final MidiCommand _midiCommand = MidiCommand();
   double masterVolume = 1.0;
   double masterPitch = 1.0;
+final MidiController _midiController = MidiController();
 
+  @override
+  void initState() {
+    super.initState();
+    _midiController.startListening();
+  }
   late AnimationController _visualizerController;
 
   final List<Map<String, dynamic>> pads = [
@@ -453,5 +459,60 @@ class _KnobControlState extends State<_KnobControl> {
         ),
       ],
     );
+  }
+}
+// Mapeo de notas MIDI capturadas de tu controlador
+final Map<int, String> samplesMap = {
+  48: 'samples/pad1.wav',
+  49: 'samples/pad2.wav',
+  50: 'samples/pad3.wav',
+  51: 'samples/pad4.wav',
+  52: 'samples/pad5.wav',
+  54: 'samples/pad7.wav',
+  55: 'samples/pad8.wav',
+  56: 'samples/pad9.wav',
+  57: 'samples/pad10.wav',
+  58: 'samples/pad11.wav',
+  60: 'samples/pad14.wav',
+  61: 'samples/pad15.wav',
+  62: 'samples/pad16.wav',
+};
+
+class MidiController {
+  final MidiCommand _midiCommand = MidiCommand();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  void startListening() {
+    _midiCommand.onMidiDataReceived.listen((data) {
+      if (data.length < 3) return;
+      
+      final status = data[0];
+      final note = data[1];
+      final velocity = data[2];
+
+      // Evento Note On (GOLPE DE PAD)
+      if (status == 144 && velocity > 0) {
+        if (samplesMap.containsKey(note)) {
+          _playSound(samplesMap[note]!);
+        }
+      }
+      // Evento Pitch Bend (RUEDA DE PITCH)
+      else if (status >= 224 && status <= 239) {
+        final lsb = data[1];
+        final msb = data[2];
+        final pitchValue = (msb << 7) | lsb;
+        _adjustPitch(pitchValue);
+      }
+    });
+  }
+
+  Future<void> _playSound(String path) async {
+    await _audioPlayer.stop();
+    await _audioPlayer.play(DeviceFileSource(path));
+  }
+
+  void _adjustPitch(int pitchValue) {
+    final factorPitch = 1.0 + ((pitchValue - 8192) / 8192.0);
+    _audioPlayer.setPlaybackRate(factorPitch.clamp(0.5, 1.5));
   }
 }
