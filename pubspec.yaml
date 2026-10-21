@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  audio_player: ^6.8.1
+  audioplayers: ^6.8.1
   file_picker: ^8.1.7
   flutter_midi_command: 1.0.2
 
