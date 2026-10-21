@@ -10,14 +10,10 @@ class MiSamplerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mi Sampler - Windows',
+      title: 'Mi Sampler',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF1E1E24),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF25252D),
-          elevation: 0,
-        ),
       ),
       home: const SamplerHome(),
     );
@@ -31,16 +27,17 @@ class SamplerHome extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mi Sampler', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.circle, color: Colors.redAccent, size: 28),
-            onPressed: () {},
-          ),
-          IconButton(icon: const Icon(Icons.play_arrow, size: 30), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.pause, size: 30), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
-          const SizedBox(width: 15),
+        title: const Text('Mi Sampler'),
+        backgroundColor: const Color(0xFF25252D),
+        actions: const [
+          Icon(Icons.circle, color: Colors.redAccent, size: 22),
+          SizedBox(width: 12),
+          Icon(Icons.play_arrow, size: 26),
+          SizedBox(width: 12),
+          Icon(Icons.pause, size: 26),
+          SizedBox(width: 12),
+          Icon(Icons.settings),
+          SizedBox(width: 16),
         ],
       ),
       body: Column(
@@ -48,111 +45,106 @@ class SamplerHome extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                _buildLeftPanel(),
-                _buildCenterPads(),
-                _buildRightPanel(),
+                Expanded(child: _buildSidePanel('IZQUIERDO', Colors.cyanAccent)),
+                Expanded(flex: 2, child: _buildPadsGrid()),
+                Expanded(child: _buildSidePanel('DERECHO', Colors.blueAccent)),
               ],
             ),
           ),
-          _buildStatusBar(),
+          Container(
+            height: 32,
+            color: const Color(0xFF121216),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.centerLeft,
+            child: const Text('Sampler listo', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLeftPanel() {
-    return Expanded(
-      flex: 1,
-      child: Container(
-        margin: const EdgeInsets.all(8.0),
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFF18181D),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(15, (index) {
-                  return Container(
-                    width: 6,
-                    height: (index % 4 + 1) * 20.0 + (index % 3) * 10.0,
-                    color: Colors.cyanAccent.withOpacity(0.8),
-                  );
-                }),
-              ),
+  Widget _buildSidePanel(String titulo, Color color) {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181D),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            height: 90,
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withOpacity(0.4)),
             ),
-            const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildFakeKnob('VOLUME'),
-                _buildFakeKnob('PITCH'),
-              ],
+            child: Center(
+              child: Icon(Icons.graphic_eq, color: color, size: 40),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildVerticalSlider(),
-                _buildVerticalSlider(),
-              ],
-            ),
-            const Spacer(),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          Text('PANEL $titulo', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ],
       ),
     );
   }
 
-  Widget _buildCenterPads() {
+  Widget _buildPadsGrid() {
     final List<Map<String, dynamic>> pads = [
-      {'label': 'KICK', 'color': Colors.orange},
-      {'label': 'SNARE', 'color': Colors.orange},
-      {'label': 'HI-HAT', 'color': Colors.orange},
-      {'label': 'CLAP', 'color': Colors.orange},
-      {'label': 'LOOP 1', 'color': Colors.blue},
-      {'label': 'LOOP 2', 'color': Colors.blue},
-      {'label': 'SAMPLE', 'color': Colors.blue},
-      {'label': 'SAMPLE', 'color': Colors.greenAccent},
-      {'label': 'SYNTH', 'color': Colors.green},
-      {'label': 'BASS', 'color': Colors.green},
-      {'label': 'CHORD', 'color': Colors.green},
-      {'label': 'VOX 1', 'color': Colors.green},
-      {'label': 'FX 1', 'color': Colors.purpleAccent},
-      {'label': 'FX 2', 'color': Colors.purpleAccent},
-      {'label': 'SHOT 1', 'color': Colors.yellowAccent},
-      {'label': 'SHOT 2', 'color': Colors.yellowAccent},
+      {'name': 'KICK', 'color': Colors.orange},
+      {'name': 'SNARE', 'color': Colors.orange},
+      {'name': 'HI-HAT', 'color': Colors.orange},
+      {'name': 'CLAP', 'color': Colors.orange},
+      {'name': 'LOOP 1', 'color': Colors.blue},
+      {'name': 'LOOP 2', 'color': Colors.blue},
+      {'name': 'SAMPLE 1', 'color': Colors.blue},
+      {'name': 'SAMPLE 2', 'color': Colors.blue},
+      {'name': 'SYNTH', 'color': Colors.green},
+      {'name': 'BASS', 'color': Colors.green},
+      {'name': 'VOX 1', 'color': Colors.green},
+      {'name': 'VOX 2', 'color': Colors.green},
+      {'name': 'FX 1', 'color': Colors.purpleAccent},
+      {'name': 'FX 2', 'color': Colors.purpleAccent},
+      {'name': 'SHOT 1', 'color': Colors.amber},
+      {'name': 'SHOT 2', 'color': Colors.amber},
     ];
 
-    return Expanded(
-      flex: 2,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16.0),
-        child: GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: 16,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.1,
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 16,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1.1,
+      ),
+      itemBuilder: (context, index) {
+        final item = pads[index];
+        final Color col = item['color'] as Color;
+        final String name = item['name'] as String;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: col.withOpacity(0.15),
+            border: Border.all(color: col, width: 2),
+            borderRadius: BorderRadius.circular(8),
           ),
-          itemBuilder: (context, index) {
-            final color = pads[index]['color'] as Color;
-            return Container(
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                border: Border.all(color: color.withOpacity(0.8), width: 2),
-                borderRadius: BorderRadius.
-                
+          child: Center(
+            child: Text(
+              name,
+              style: TextStyle(
+                color: col,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
