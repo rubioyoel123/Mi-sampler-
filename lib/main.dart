@@ -120,7 +120,7 @@ class _SamplerStudioState extends State<SamplerStudio> {
     super.dispose();
   }
 
-  
+  Future<void> _initMidi() async {
     try {
       final devices = await _midiCommand.devices;
       if (!mounted) return;
@@ -257,15 +257,13 @@ class _SamplerStudioState extends State<SamplerStudio> {
     if (index < 0 || index >= pads.length) return;
 
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: false,
-      );
+      final PlatformFile? result =
+          await FilePicker.pickFile(type: FileType.audio);
 
-      if (!mounted || result == null || result.files.isEmpty) return;
+      if (!mounted || result == null) return;
 
-      final path = result.files.single.path;
-      if (path == null) return;
+      final path = result.path;
+      if (path == null || path.isEmpty) return;
 
       final tempPlayer = AudioPlayer();
       Duration? duration;
@@ -643,7 +641,6 @@ class _SamplerStudioState extends State<SamplerStudio> {
               final loaded = path != null;
               final selected = selectedPad == index;
 
-              // Si hay audio, mostrar su nombre en el pad.
               final displayName =
                   loaded ? _fileName(path!) : pad['name'] as String;
 
@@ -1078,4 +1075,3 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
     );
   }
 }
-```
