@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -7,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
+import 'package:flutter_midi_command/flutter_midi_command_messages.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,7 +121,7 @@ class _SamplerStudioState extends State<SamplerStudio>
 
   Future<void> _initMidi() async {
     try {
-      final List<MidiDevice>? devices = await _midiCommand.devices;
+      final devices = await _midiCommand.devices;
 
       if (!mounted || devices == null || devices.isEmpty) {
         return;
@@ -131,17 +131,9 @@ class _SamplerStudioState extends State<SamplerStudio>
 
       _midiSubscription =
           _midiCommand.onMidiDataReceived?.listen((event) {
-        final data = event.data;
-
-        if (data.length < 3) return;
-
-        final int status = data[0] & 0xF0;
-        final int note = data[1];
-        final int velocity = data[2];
-
-        if (status == 0x90 && velocity > 0) {
+        if (event is NoteOnMessage && event.velocity > 0) {
           final int index =
-              pads.indexWhere((pad) => pad['midi'] == note);
+              pads.indexWhere((pad) => pad['midi'] == event.note);
 
           if (index != -1 && mounted) {
             _playPad(index);
@@ -158,8 +150,7 @@ class _SamplerStudioState extends State<SamplerStudio>
 
     final String key = event.logicalKey.keyLabel.toUpperCase();
 
-    final int index =
-        pads.indexWhere((pad) => pad['key'] == key);
+    final int index = pads.indexWhere((pad) => pad['key'] == key);
 
     if (index != -1) {
       _playPad(index);
@@ -197,21 +188,20 @@ class _SamplerStudioState extends State<SamplerStudio>
 
   Future<void> _loadAudio(int index) async {
     try {
-      final FilePickerResult? result =
-          await FilePicker.platform.pickFiles(
+      final PlatformFile? file = await FilePicker.pickFile(
         type: FileType.audio,
       );
 
-      if (!mounted || result == null || result.files.isEmpty) {
-        return;
-      }
+      if (!mounted || file == null) return;
 
-      final String? path = result.files.single.path;
+      final String? path = file.path;
 
       if (path != null) {
         setState(() {
           pads[index]['path'] = path;
         });
+      } else {
+        debugPrint('No se pudo obtener la ruta del archivo seleccionado.');
       }
     } catch (e) {
       debugPrint('Error al cargar el audio: $e');
@@ -374,10 +364,7 @@ class _SamplerStudioState extends State<SamplerStudio>
   Widget _buildAnimatedVisualizer(Color color) {
     return Container(
       height: 120,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF0D0F13),
         borderRadius: BorderRadius.circular(7),
@@ -392,9 +379,7 @@ class _SamplerStudioState extends State<SamplerStudio>
             children: List.generate(16, (index) {
               final double waveHeight =
                   math.sin(
-                    _visualizerController.value *
-                            2 *
-                            math.pi +
+                    _visualizerController.value * 2 * math.pi +
                         index * 0.55,
                   ) *
                   0.5 +
@@ -404,13 +389,9 @@ class _SamplerStudioState extends State<SamplerStudio>
                 child: Container(
                   width: 6,
                   height: 12 + waveHeight * 75,
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 1,
-                  ),
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(
-                      0.35 + waveHeight * 0.45,
-                    ),
+                    color: color.withOpacity(0.35 + waveHeight * 0.45),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -433,8 +414,7 @@ class _SamplerStudioState extends State<SamplerStudio>
           padding: const EdgeInsets.all(4),
           physics: const NeverScrollableScrollPhysics(),
           itemCount: pads.length,
-          gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 4,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
@@ -447,7 +427,7 @@ class _SamplerStudioState extends State<SamplerStudio>
             final bool hasAudio = pad['path'] != null;
 
             return GestureDetector(
-              onTapDown: (_) => _playPad(index),
+              onTap: () => _playPad(index),
               onDoubleTap: () => _loadAudio(index),
               onSecondaryTap: () => _loadAudio(index),
               onLongPress: () => _loadAudio(index),
@@ -543,9 +523,7 @@ class _SamplerStudioState extends State<SamplerStudio>
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _sectionTitle('ESPECTRO CANAL R'),
-            _buildAnimatedVisualizer(
-              const Color(0xFF648BA8),
-            ),
+            _buildAnimatedVisualizer(const Color(0xFF648BA8)),
             const Divider(color: borderColor, height: 24),
             _sectionTitle('ESTADO DEL TEMPO'),
             Container(
@@ -561,11 +539,7 @@ class _SamplerStudioState extends State<SamplerStudio>
               ),
               child: const Column(
                 children: [
-                  Icon(
-                    Icons.speed,
-                    color: accentColor,
-                    size: 23,
-                  ),
+                  Icon(Icons.speed, color: accentColor, size: 23),
                   SizedBox(height: 8),
                   Text(
                     '128.0',
@@ -609,9 +583,7 @@ class _SamplerStudioState extends State<SamplerStudio>
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: const BoxDecoration(
         color: Color(0xFF0D0F13),
-        border: Border(
-          top: BorderSide(color: borderColor),
-        ),
+        border: Border(top: BorderSide(color: borderColor)),
       ),
       child: Row(
         children: [
@@ -693,8 +665,7 @@ class _KnobControlState extends State<_KnobControl> {
         GestureDetector(
           onPanUpdate: (details) {
             setState(() {
-              _currentValue = (_currentValue -
-                      details.delta.dy * 0.01)
+              _currentValue = (_currentValue - details.delta.dy * 0.01)
                   .clamp(0.0, 1.0)
                   .toDouble();
 
