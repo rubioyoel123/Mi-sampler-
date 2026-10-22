@@ -120,7 +120,7 @@ class _SamplerStudioState extends State<SamplerStudio> {
     super.dispose();
   }
 
-  Future<void> _initMidi() async {
+  
     try {
       final devices = await _midiCommand.devices;
       if (!mounted) return;
