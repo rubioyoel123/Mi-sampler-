@@ -4,7 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
 import 'package:flutter_midi_command/flutter_midi_command_messages.dart';
@@ -54,7 +54,7 @@ class SamplePad {
   double volume = 1.0;
   double pitch = 1.0;
   bool active = false;
-  AudioPlayer? player;
+  SoundHandle? handle;
 }
 
 class SamplerHome extends StatefulWidget {
@@ -67,6 +67,13 @@ class SamplerHome extends StatefulWidget {
 class _SamplerHomeState extends State<SamplerHome> {
   final MidiCommand midi = MidiCommand();
   final FocusNode keyboardFocus = FocusNode();
+  final SoLoud audio = SoLoud.instance;
+  final Map<String, AudioSource> _audioCache = {};
+  bool _audioReady = false;
+  bool echoEnabled = false;
+  bool reverbEnabled = false;
+  bool flangerEnabled = false;
+  bool bassEnabled = false;
 
   final List<List<SamplePad>> banks = List.generate(
     4,
@@ -100,6 +107,7 @@ class _SamplerHomeState extends State<SamplerHome> {
   void initState() {
     super.initState();
     _loadSettings();
+    _initAudio();
     _initMidi();
   }
 
@@ -110,10 +118,11 @@ class _SamplerHomeState extends State<SamplerHome> {
 
     for (final bank in banks) {
       for (final pad in bank) {
-        pad.player?.dispose();
+        // Las fuentes se liberan al cerrar el motor.
       }
     }
 
+    if (_audioReady) { audio.disposeAllSound(); audio.deinit(); }
     super.dispose();
   }
 
@@ -128,6 +137,10 @@ class _SamplerHomeState extends State<SamplerHome> {
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
 
         selectedBank = (prefs.getInt('selectedBank') ?? 0).clamp(0, 3);
+        echoEnabled = prefs.getBool('fx_echo') ?? false;
+        reverbEnabled = prefs.getBool('fx_reverb') ?? false;
+        flangerEnabled = prefs.getBool('fx_flanger') ?? false;
+        bassEnabled = prefs.getBool('fx_bass') ?? false;
         for (int b = 0; b < banks.length; b++) {
           for (int i = 0; i < banks[b].length; i++) {
             final pad = banks[b][i];
@@ -151,6 +164,10 @@ class _SamplerHomeState extends State<SamplerHome> {
       await prefs.setDouble('masterVolume', masterVolume);
       await prefs.setDouble('masterPitch', masterPitch);
       await prefs.setInt('selectedBank', selectedBank);
+      await prefs.setBool('fx_echo', echoEnabled);
+      await prefs.setBool('fx_reverb', reverbEnabled);
+      await prefs.setBool('fx_flanger', flangerEnabled);
+      await prefs.setBool('fx_bass', bassEnabled);
 
       for (int b = 0; b < banks.length; b++) {
         for (int i = 0; i < banks[b].length; i++) {
@@ -172,6 +189,50 @@ class _SamplerHomeState extends State<SamplerHome> {
       }
     } catch (e) {
       _showStatus('Error al guardar: $e');
+    }
+  }
+
+  Future<void> _initAudio() async {
+    try {
+      await audio.init();
+      audio.setMaxActiveVoiceCount(64);
+      if (!mounted) return;
+      setState(() {
+        _audioReady = true;
+        status = 'Motor de audio listo · SoLoud';
+      });
+      _applyEffects();
+    } catch (e) {
+      _showStatus('No se pudo iniciar el motor de audio: $e');
+    }
+  }
+
+  void _applyEffects() {
+    if (!_audioReady) return;
+    final filters = audio.filters;
+    if (echoEnabled) {
+      filters.echoFilter.activate();
+      filters.echoFilter.delay.value = 0.28;
+      filters.echoFilter.decay.value = 0.35;
+    } else {
+      filters.echoFilter.deactivate();
+    }
+    if (reverbEnabled) {
+      filters.freeverbFilter.activate();
+      filters.freeverbFilter.roomSize.value = 0.65;
+      filters.freeverbFilter.damp.value = 0.35;
+    } else {
+      filters.freeverbFilter.deactivate();
+    }
+    if (flangerEnabled) {
+      filters.flangerFilter.activate();
+    } else {
+      filters.flangerFilter.deactivate();
+    }
+    if (bassEnabled) {
+      filters.bassboostFilter.activate();
+    } else {
+      filters.bassboostFilter.deactivate();
     }
   }
 
@@ -264,25 +325,29 @@ final selectedFile = files.first;
     }
 
     try {
-      pad.player ??= AudioPlayer();
-
-      await pad.player!.stop();
-      await pad.player!.setVolume(
-        (masterVolume * pad.volume).clamp(0.0, 1.0),
+      if (!_audioReady) {
+        _showStatus('El motor de audio todavía está iniciando');
+        return;
+      }
+      var source = _audioCache[pad.audioPath!];
+      if (source == null) {
+        source = await audio.loadFile(pad.audioPath!);
+        _audioCache[pad.audioPath!] = source;
+      }
+      final handle = audio.play(
+        source,
+        volume: (masterVolume * pad.volume).clamp(0.0, 1.0),
       );
-      await pad.player!.setPlaybackRate(
+      pad.handle = handle;
+      audio.setRelativePlaySpeed(
+        handle,
         (masterPitch * pad.pitch).clamp(0.5, 2.0),
       );
-
-      setState(() => pad.active = true);
-
-      await pad.player!.play(DeviceFileSource(pad.audioPath!));
-
-      Future.delayed(const Duration(milliseconds: 180), () {
+      if (mounted) setState(() => pad.active = true);
+      _showStatus('Reproduciendo ${pad.name}');
+      Future.delayed(const Duration(milliseconds: 250), () {
         if (mounted) setState(() => pad.active = false);
       });
-
-      _showStatus('Reproduciendo ${pad.name}');
     } catch (e) {
       _showStatus('Error al reproducir: $e');
     }
@@ -291,7 +356,7 @@ final selectedFile = files.first;
   Future<void> _stopAll() async {
     for (final bank in banks) {
       for (final pad in bank) {
-        await pad.player?.stop();
+        if (pad.handle != null && _audioReady) { audio.stop(pad.handle!); pad.handle = null; }
       }
     }
 
@@ -317,7 +382,7 @@ final selectedFile = files.first;
   }
 
   Future<void> _clearPad(int index) async {
-    await pads[index].player?.stop();
+    if (pads[index].handle != null && _audioReady) { audio.stop(pads[index].handle!); pads[index].handle = null; }
 
     setState(() {
       pads[index].audioPath = null;
@@ -380,6 +445,7 @@ final selectedFile = files.first;
             children: [
               _buildMasterControls(),
               _buildBankSelector(),
+              _buildEffectsPanel(),
               Expanded(child: _buildPads()),
               _buildStatusBar(),
             ],
@@ -434,6 +500,55 @@ final selectedFile = files.first;
               _saveSettings();
             },
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEffectsPanel() {
+    Widget effect(String label, bool enabled, ValueChanged<bool> change) {
+      return Expanded(
+        child: FilterChip(
+          label: Text(label, style: const TextStyle(fontSize: 10)),
+          selected: enabled,
+          onSelected: (value) {
+            setState(() => change(value));
+            _applyEffects();
+            _saveSettings();
+          },
+          selectedColor: Colors.deepPurpleAccent,
+          checkmarkColor: Colors.white,
+          backgroundColor: const Color(0xFF292936),
+          side: BorderSide(color: enabled ? Colors.cyanAccent : Colors.white12),
+          padding: EdgeInsets.zero,
+        ),
+      );
+    }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF191923),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 3),
+            child: Text('EFECTOS DE AUDIO EN TIEMPO REAL',
+              style: TextStyle(fontSize: 10, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+          ),
+          Row(children: [
+            effect('ECO', echoEnabled, (v) => echoEnabled = v),
+            const SizedBox(width: 4),
+            effect('REVERB', reverbEnabled, (v) => reverbEnabled = v),
+            const SizedBox(width: 4),
+            effect('FLANGER', flangerEnabled, (v) => flangerEnabled = v),
+            const SizedBox(width: 4),
+            effect('BAJOS', bassEnabled, (v) => bassEnabled = v),
+          ]),
         ],
       ),
     );
