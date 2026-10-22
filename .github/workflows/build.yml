@@ -1,53 +1,42 @@
-
-name: Compilar Sampler Perreo PRO para Windows
+name: Compilar Sampler Perreo para Windows
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
       - master
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Compilar aplicación
     runs-on: windows-latest
 
     steps:
-      - name: Descargar código
+      - name: Descargar el repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar Flutter
+      - name: Configurar Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          channel: 'stable'
+          cache: true
 
-      - name: Verificar Flutter
+      - name: Verificar dependencias de Flutter
         run: flutter doctor -v
 
-      - name: Habilitar Windows
+      - name: Habilitar soporte para Windows
         run: flutter config --enable-windows-desktop
 
-      - name: Crear archivos de Windows si faltan
-        shell: pwsh
-        run: |
-          if (!(Test-Path "windows/CMakeLists.txt")) {
-            flutter create --platforms=windows --project-name=sampler_perreo_pro .
-          }
-
-      - name: Descargar dependencias
+      - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar aplicación
+      - name: Compilar ejecutable para Windows
         run: flutter build windows --release
 
-      - name: Guardar aplicación compilada
+      - name: Subir artefacto de compilación
         uses: actions/upload-artifact@v4
         with:
-          name: Sampler-Perreo-PRO-Windows
+          name: Sampler-Perreo-Windows
           path: build/windows/x64/runner/Release/
-          if-no-files-found: error
 
+  
