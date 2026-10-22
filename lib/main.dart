@@ -1,5 +1,6 @@
-
+```dart
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,10 +15,10 @@ void main() {
   runApp(const MiSamplerApp());
 }
 
-const Color bgColor = Color(0xFF111318);
-const Color panelColor = Color(0xFF191C23);
-const Color borderColor = Color(0xFF303640);
-const Color accentColor = Color(0xFF7297B5);
+const Color bgColor = Color(0xFF101217);
+const Color panelColor = Color(0xFF191D25);
+const Color borderColor = Color(0xFF303743);
+const Color accentColor = Color(0xFF75A7D2);
 
 class MiSamplerApp extends StatelessWidget {
   const MiSamplerApp({super.key});
@@ -33,12 +34,6 @@ class MiSamplerApp extends StatelessWidget {
         colorScheme: const ColorScheme.dark(
           primary: accentColor,
           surface: panelColor,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: panelColor,
-          foregroundColor: Color(0xFFE1E5EB),
-          elevation: 0,
-          centerTitle: false,
         ),
         sliderTheme: const SliderThemeData(
           activeTrackColor: accentColor,
@@ -58,35 +53,37 @@ class SamplerStudio extends StatefulWidget {
   State<SamplerStudio> createState() => _SamplerStudioState();
 }
 
-class _SamplerStudioState extends State<SamplerStudio>
-    with TickerProviderStateMixin {
+class _SamplerStudioState extends State<SamplerStudio> {
   final FocusNode _focusNode = FocusNode();
   final MidiCommand _midiCommand = MidiCommand();
 
   StreamSubscription<dynamic>? _midiSubscription;
+  Timer? _stopTimer;
 
   double masterVolume = 1.0;
   double masterPitch = 1.0;
 
-  late final AnimationController _visualizerController;
+  int selectedPad = 0;
+  String midiStatus = 'MIDI no conectado';
+  List<dynamic> midiDevices = [];
 
   final List<Map<String, dynamic>> pads = [
-    {'name': 'KICK', 'color': const Color(0xFFB98553), 'key': '1', 'midi': 36},
-    {'name': 'SNARE', 'color': const Color(0xFFB98553), 'key': '2', 'midi': 37},
-    {'name': 'HI-HAT', 'color': const Color(0xFFB98553), 'key': '3', 'midi': 38},
-    {'name': 'CLAP', 'color': const Color(0xFFB98553), 'key': '4', 'midi': 39},
-    {'name': 'LOOP 1', 'color': const Color(0xFF648BA8), 'key': 'Q', 'midi': 40},
-    {'name': 'LOOP 2', 'color': const Color(0xFF648BA8), 'key': 'W', 'midi': 41},
-    {'name': 'SAMPLE 1', 'color': const Color(0xFF648BA8), 'key': 'E', 'midi': 42},
-    {'name': 'SAMPLE 2', 'color': const Color(0xFF739985), 'key': 'R', 'midi': 43},
-    {'name': 'SYNTH', 'color': const Color(0xFF739985), 'key': 'A', 'midi': 44},
-    {'name': 'BASS', 'color': const Color(0xFF739985), 'key': 'S', 'midi': 45},
-    {'name': 'VOX 1', 'color': const Color(0xFF739985), 'key': 'D', 'midi': 46},
-    {'name': 'VOX 2', 'color': const Color(0xFF739985), 'key': 'F', 'midi': 47},
-    {'name': 'FX 1', 'color': const Color(0xFF9381AA), 'key': 'Z', 'midi': 48},
-    {'name': 'FX 2', 'color': const Color(0xFF9381AA), 'key': 'X', 'midi': 49},
-    {'name': 'SHOT 1', 'color': const Color(0xFFB49B62), 'key': 'C', 'midi': 50},
-    {'name': 'SHOT 2', 'color': const Color(0xFFB49B62), 'key': 'V', 'midi': 51},
+    {'name': 'KICK', 'color': const Color(0xFFC18B58), 'key': '1', 'midi': 36},
+    {'name': 'SNARE', 'color': const Color(0xFFC18B58), 'key': '2', 'midi': 37},
+    {'name': 'HI-HAT', 'color': const Color(0xFFC18B58), 'key': '3', 'midi': 38},
+    {'name': 'CLAP', 'color': const Color(0xFFC18B58), 'key': '4', 'midi': 39},
+    {'name': 'LOOP 1', 'color': const Color(0xFF689BC2), 'key': 'Q', 'midi': 40},
+    {'name': 'LOOP 2', 'color': const Color(0xFF689BC2), 'key': 'W', 'midi': 41},
+    {'name': 'SAMPLE 1', 'color': const Color(0xFF689BC2), 'key': 'E', 'midi': 42},
+    {'name': 'SAMPLE 2', 'color': const Color(0xFF83A98E), 'key': 'R', 'midi': 43},
+    {'name': 'SYNTH', 'color': const Color(0xFF83A98E), 'key': 'A', 'midi': 44},
+    {'name': 'BASS', 'color': const Color(0xFF83A98E), 'key': 'S', 'midi': 45},
+    {'name': 'VOX 1', 'color': const Color(0xFF83A98E), 'key': 'D', 'midi': 46},
+    {'name': 'VOX 2', 'color': const Color(0xFF83A98E), 'key': 'F', 'midi': 47},
+    {'name': 'FX 1', 'color': const Color(0xFF9D89BC), 'key': 'Z', 'midi': 48},
+    {'name': 'FX 2', 'color': const Color(0xFF9D89BC), 'key': 'X', 'midi': 49},
+    {'name': 'SHOT 1', 'color': const Color(0xFFC0A66B), 'key': 'C', 'midi': 50},
+    {'name': 'SHOT 2', 'color': const Color(0xFFC0A66B), 'key': 'V', 'midi': 51},
   ];
 
   @override
@@ -97,21 +94,20 @@ class _SamplerStudioState extends State<SamplerStudio>
       pad['player'] = AudioPlayer();
       pad['path'] = null;
       pad['active'] = false;
+      pad['start'] = 0.0;
+      pad['end'] = 0.0;
+      pad['duration'] = 0.0;
+      pad['gain'] = 1.0;
     }
-
-    _visualizerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat();
 
     _initMidi();
   }
 
   @override
   void dispose() {
+    _stopTimer?.cancel();
     _midiSubscription?.cancel();
     _focusNode.dispose();
-    _visualizerController.dispose();
 
     for (final pad in pads) {
       (pad['player'] as AudioPlayer).dispose();
@@ -123,93 +119,254 @@ class _SamplerStudioState extends State<SamplerStudio>
   Future<void> _initMidi() async {
     try {
       final devices = await _midiCommand.devices;
+      if (!mounted) return;
 
-      if (!mounted || devices == null || devices.isEmpty) {
-        return;
-      }
+      setState(() {
+        midiDevices = devices ?? [];
+        midiStatus = midiDevices.isEmpty
+            ? 'No se encontraron dispositivos'
+            : 'Dispositivo disponible';
+      });
 
       _midiSubscription =
           _midiCommand.onMidiDataReceived?.listen((event) {
         final message = event.message;
 
         if (message is NoteOnMessage && message.velocity > 0) {
-          final int index =
+          final index =
               pads.indexWhere((pad) => pad['midi'] == message.note);
-
-          if (index != -1 && mounted) {
-            _playPad(index);
-          }
+          if (index != -1) _playPad(index);
         }
       });
 
-      await _midiCommand.connectToDevice(devices.first);
+      if (midiDevices.isNotEmpty) {
+        await _midiCommand.connectToDevice(midiDevices.first);
+        if (mounted) {
+          setState(() => midiStatus = 'MIDI conectado');
+        }
+      }
     } catch (e) {
-      debugPrint('No se pudo conectar el dispositivo MIDI: $e');
+      debugPrint('Error MIDI: $e');
+      if (mounted) {
+        setState(() => midiStatus = 'No se pudo conectar MIDI');
+      }
+    }
+  }
+
+  Future<void> _refreshMidi() async {
+    try {
+      final devices = await _midiCommand.devices;
+      if (!mounted) return;
+      setState(() {
+        midiDevices = devices ?? [];
+        midiStatus = midiDevices.isEmpty
+            ? 'No se encontraron dispositivos'
+            : 'Dispositivos actualizados';
+      });
+    } catch (e) {
+      debugPrint('Error al consultar MIDI: $e');
     }
   }
 
   void _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return;
+    if (event is! KeyDownEvent || event.repeat) return;
 
-    final String key = event.logicalKey.keyLabel.toUpperCase();
-    final int index = pads.indexWhere((pad) => pad['key'] == key);
-
-    if (index != -1) {
-      _playPad(index);
-    }
+    final key = event.logicalKey.keyLabel.toUpperCase();
+    final index = pads.indexWhere((pad) => pad['key'] == key);
+    if (index != -1) _playPad(index);
   }
 
   Future<void> _playPad(int index) async {
     if (index < 0 || index >= pads.length) return;
 
     final pad = pads[index];
-    final AudioPlayer player = pad['player'] as AudioPlayer;
-    final String? path = pad['path'] as String?;
+    final path = pad['path'] as String?;
 
-    if (mounted) {
-      setState(() => pad['active'] = true);
-    }
-
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        setState(() => pad['active'] = false);
-      }
+    setState(() {
+      selectedPad = index;
+      pad['active'] = true;
     });
 
-    if (path == null) return;
+    Future.delayed(const Duration(milliseconds: 130), () {
+      if (mounted) setState(() => pad['active'] = false);
+    });
+
+    if (path == null || !File(path).existsSync()) return;
 
     try {
+      final player = pad['player'] as AudioPlayer;
+      _stopTimer?.cancel();
+
       await player.stop();
-      await player.setVolume(masterVolume);
-      await player.setPlaybackRate(
-        masterPitch.clamp(0.5, 2.0).toDouble(),
+      await player.setVolume(
+        (masterVolume * (pad['gain'] as double)).clamp(0.0, 1.0),
       );
+      await player.setPlaybackRate(masterPitch.clamp(0.5, 2.0));
+
+      final startMs = (pad['start'] as double).round();
+      final endMs = (pad['end'] as double).round();
+
       await player.play(DeviceFileSource(path));
+
+      if (startMs > 0) {
+        await player.seek(Duration(milliseconds: startMs));
+      }
+
+      if (endMs > 0 && endMs > startMs) {
+        final remaining = (endMs - startMs) / masterPitch;
+        _stopTimer = Timer(
+          Duration(milliseconds: remaining.round().clamp(1, 2147483647)),
+          () => player.stop(),
+        );
+      }
     } catch (e) {
-      debugPrint('Error al reproducir el sonido: $e');
+      debugPrint('Error reproduciendo audio: $e');
     }
   }
 
   Future<void> _loadAudio(int index) async {
     try {
-      final PlatformFile? file = await FilePicker.pickFile(
-        type: FileType.audio,
-      );
+      final file = await FilePicker.pickFile(type: FileType.audio);
+      if (!mounted || file == null || file.path == null) return;
 
-      if (!mounted || file == null) return;
+      final path = file.path!;
+      final tempPlayer = AudioPlayer();
+      Duration? duration;
 
-      final String? path = file.path;
+      try {
+        await tempPlayer.setSource(DeviceFileSource(path));
+        duration = await tempPlayer.getDuration();
+      } catch (e) {
+        debugPrint('No se pudo leer la duración: $e');
+      } finally {
+        await tempPlayer.dispose();
+      }
 
-      if (path != null) {
-        setState(() {
-          pads[index]['path'] = path;
-        });
-      } else {
-        debugPrint('No se pudo obtener la ruta del archivo seleccionado.');
+      final durationMs = (duration?.inMilliseconds ?? 0).toDouble();
+
+      setState(() {
+        pads[index]['path'] = path;
+        pads[index]['duration'] = durationMs;
+        pads[index]['start'] = 0.0;
+        pads[index]['end'] = durationMs;
+        selectedPad = index;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Audio cargado en ${pads[index]['name']}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
-      debugPrint('Error al cargar el audio: $e');
+      debugPrint('Error cargando audio: $e');
     }
+  }
+
+  Future<void> _editSelectedPad() async {
+    final pad = pads[selectedPad];
+
+    if (pad['path'] == null) {
+      await _loadAudio(selectedPad);
+      if (!mounted || pads[selectedPad]['path'] == null) return;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => _AudioEditorDialog(
+        padName: pad['name'] as String,
+        duration: pad['duration'] as double,
+        initialStart: pad['start'] as double,
+        initialEnd: pad['end'] as double,
+        initialGain: pad['gain'] as double,
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    // El diálogo actualiza los valores mediante su propio resultado.
+    // Se leen de los controladores al confirmar usando _editorValues.
+    final values = _editorValues;
+    if (values != null) {
+      setState(() {
+        pad['start'] = values['start']!;
+        pad['end'] = values['end']!;
+        pad['gain'] = values['gain']!;
+      });
+    }
+    _editorValues = null;
+  }
+
+  Map<String, double>? _editorValues;
+
+  void _openMidiSettings() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: panelColor,
+          title: const Row(
+            children: [
+              Icon(Icons.piano, color: accentColor),
+              SizedBox(width: 10),
+              Text('Configuración MIDI'),
+            ],
+          ),
+          content: SizedBox(
+            width: 430,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(midiStatus, style: const TextStyle(color: accentColor)),
+                const SizedBox(height: 14),
+                const Text('Dispositivos detectados'),
+                const SizedBox(height: 8),
+                if (midiDevices.isEmpty)
+                  const Text(
+                    'No hay dispositivos disponibles. Conecta tu controlador y actualiza.',
+                    style: TextStyle(color: Colors.white60),
+                  )
+                else
+                  ...midiDevices.map(
+                    (device) => ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.usb, color: accentColor),
+                      title: Text(device.name?.toString() ?? device.toString()),
+                      subtitle: const Text('Controlador MIDI'),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Asignaciones actuales de pads',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Las notas MIDI 36–51 activan los 16 pads.',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _refreshMidi();
+                if (mounted) setDialogState(() {});
+              },
+              child: const Text('Actualizar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -219,17 +376,27 @@ class _SamplerStudioState extends State<SamplerStudio>
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
-        appBar: _buildTopBar(),
         body: SafeArea(
           child: Column(
             children: [
+              _buildHeader(),
               Expanded(
-                child: Row(
-                  children: [
-                    _buildLeftPanel(),
-                    _buildPadsArea(),
-                    _buildRightPanel(),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMasterControls(),
+                          const SizedBox(height: 14),
+                          _buildPadsPanel(),
+                          const SizedBox(height: 14),
+                          _buildEditorPanel(),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
               _buildStatusBar(),
@@ -240,391 +407,430 @@ class _SamplerStudioState extends State<SamplerStudio>
     );
   }
 
-  PreferredSizeWidget _buildTopBar() {
-    return AppBar(
-      toolbarHeight: 60,
-      title: const Row(
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: const BoxDecoration(
+        color: panelColor,
+        border: Border(bottom: BorderSide(color: borderColor)),
+      ),
+      child: Row(
         children: [
-          Icon(Icons.graphic_eq, color: accentColor, size: 27),
-          SizedBox(width: 12),
-          Column(
+          Container(
+            width: 43,
+            height: 43,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.graphic_eq, color: accentColor, size: 27),
+          ),
+          const SizedBox(width: 13),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'SAMPLER PERREO',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'DJ DANNYS YOEL',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: _openMidiSettings,
+            icon: const Icon(Icons.piano, size: 18),
+            label: const Text('MIDI'),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.circle,
+            size: 9,
+            color: midiStatus == 'MIDI conectado'
+                ? const Color(0xFF83C99B)
+                : Colors.orangeAccent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMasterControls() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _decoration(),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 14,
+        spacing: 24,
+        children: [
+          const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'SAMPLER PERREO',
+                'CONTROLES MAESTROS',
                 style: TextStyle(
-                  fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1,
+                  fontSize: 12,
                 ),
               ),
-              SizedBox(height: 3),
+              SizedBox(height: 4),
               Text(
-                'DJ DANNYS YOEL',
+                'Ajusta el sonido de todo el sampler',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ],
+          ),
+          SizedBox(
+            width: 250,
+            child: Row(
+              children: [
+                const Icon(Icons.volume_up, color: accentColor, size: 19),
+                Expanded(
+                  child: Slider(
+                    value: masterVolume,
+                    onChanged: (value) {
+                      setState(() => masterVolume = value);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 42,
+                  child: Text('${(masterVolume * 100).round()}%'),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 250,
+            child: Row(
+              children: [
+                const Icon(Icons.speed, color: accentColor, size: 19),
+                Expanded(
+                  child: Slider(
+                    min: 0.5,
+                    max: 2.0,
+                    value: masterPitch,
+                    onChanged: (value) {
+                      setState(() => masterPitch = value);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: Text('${masterPitch.toStringAsFixed(2)}x'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPadsPanel() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _decoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.grid_view_rounded, color: accentColor),
+              const SizedBox(width: 9),
+              const Expanded(
+                child: Text(
+                  'BANCO DE SONIDOS',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Text(
+                '${pads.where((p) => p['path'] != null).length}/16 cargados',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: pads.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.65,
+            ),
+            itemBuilder: (context, index) {
+              final pad = pads[index];
+              final color = pad['color'] as Color;
+              final active = pad['active'] as bool;
+              final loaded = pad['path'] != null;
+              final selected = selectedPad == index;
+
+              return GestureDetector(
+                onTap: () => _playPad(index),
+                onDoubleTap: () => _loadAudio(index),
+                onSecondaryTap: () => _loadAudio(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? color.withValues(alpha: 0.38)
+                        : selected
+                            ? color.withValues(alpha: 0.14)
+                            : const Color(0xFF20242D),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected || active ? color : borderColor,
+                      width: selected || active ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            loaded ? Icons.graphic_eq : Icons.add,
+                            size: 17,
+                            color: color,
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${pad['key']}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        pad['name'] as String,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        loaded ? 'Audio cargado' : 'Doble clic: cargar',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditorPanel() {
+    final pad = pads[selectedPad];
+    final loaded = pad['path'] != null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _decoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune, color: accentColor),
+              const SizedBox(width: 9),
+              const Expanded(
+                child: Text(
+                  'MINI EDITOR DE AUDIO',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Text(
+                pad['name'] as String,
                 style: TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF929BA8),
-                  letterSpacing: 2,
+                  color: pad['color'] as Color,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
-        ],
-      ),
-      actions: [
-        const Center(
-          child: Text(
-            'WINDOWS  •  AUDIO',
-            style: TextStyle(
-              fontSize: 10,
-              color: Color(0xFF929BA8),
-              letterSpacing: 1,
-            ),
+          const SizedBox(height: 8),
+          Text(
+            loaded
+                ? (pad['path'] as String).split(Platform.pathSeparator).last
+                : 'Selecciona un pad y carga un archivo de audio',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
-        ),
-        const SizedBox(width: 18),
-        IconButton(
-          tooltip: 'Estado del sampler',
-          icon: const Icon(
-            Icons.circle,
-            color: Color(0xFF739985),
-            size: 11,
-          ),
-          onPressed: () {},
-        ),
-        const SizedBox(width: 10),
-      ],
-    );
-  }
-
-  Widget _buildLeftPanel() {
-    return Expanded(
-      flex: 3,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 12, 6, 12),
-        padding: const EdgeInsets.all(14),
-        decoration: _panelDecoration(),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _sectionTitle('ESPECTRO CANAL L'),
-            _buildAnimatedVisualizer(accentColor),
-            const Divider(color: borderColor, height: 24),
-            _sectionTitle('CONTROLES MAESTROS'),
+          const SizedBox(height: 12),
+          if (loaded) ...[
+            _buildTrimPreview(pad),
+            const SizedBox(height: 12),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _KnobControl(
-                  label: 'VOLUME',
-                  value: masterVolume,
-                  onChanged: (value) {
-                    setState(() => masterVolume = value);
-                  },
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _editSelectedPad,
+                    icon: const Icon(Icons.content_cut),
+                    label: const Text('Recortar y ajustar ganancia'),
+                  ),
                 ),
-                _KnobControl(
-                  label: 'PITCH',
-                  value: masterPitch,
-                  onChanged: (value) {
-                    setState(() => masterPitch = value);
-                  },
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: () => _playPad(selectedPad),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Probar'),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Cambiar audio',
+                  onPressed: () => _loadAudio(selectedPad),
+                  icon: const Icon(Icons.folder_open),
                 ),
               ],
             ),
-            Text(
-              'VOL ${(masterVolume * 100).round()}%   '
-              'PITCH ${(masterPitch * 100).round()}%',
-              style: const TextStyle(
-                fontSize: 10,
-                color: Color(0xFF929BA8),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _loadAudio(selectedPad),
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Cargar audio en el pad seleccionado'),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: Color(0xFFB9C1CC),
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
+  Widget _buildTrimPreview(Map<String, dynamic> pad) {
+    final duration = pad['duration'] as double;
+    final start = pad['start'] as double;
+    final end = pad['end'] as double;
+    final gain = pad['gain'] as double;
 
-  BoxDecoration _panelDecoration() {
-    return BoxDecoration(
-      color: panelColor,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: borderColor),
-    );
-  }
-
-  Widget _buildAnimatedVisualizer(Color color) {
     return Container(
-      height: 120,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0F13),
-        borderRadius: BorderRadius.circular(7),
+        color: const Color(0xFF101318),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
-      child: AnimatedBuilder(
-        animation: _visualizerController,
-        builder: (context, child) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(16, (index) {
-              final double waveHeight =
-                  math.sin(
-                    _visualizerController.value * 2 * math.pi +
-                        index * 0.55,
-                  ) *
-                  0.5 +
-                  0.5;
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: List.generate(48, (i) {
+              final h = 8 + (math.sin(i * 1.7).abs() * 23);
+              final time = duration * i / 48;
+              final inRange = time >= start && (end <= 0 || time <= end);
 
-              return Flexible(
+              return Expanded(
                 child: Container(
-                  width: 6,
-                  height: 12 + waveHeight * 75,
+                  height: h,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: color.withValues(
-                      alpha: 0.35 + waveHeight * 0.45,
-                    ),
+                    color: inRange
+                        ? accentColor.withValues(alpha: 0.8)
+                        : borderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               );
             }),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPadsArea() {
-    return Expanded(
-      flex: 5,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(6, 12, 6, 12),
-        padding: const EdgeInsets.all(10),
-        decoration: _panelDecoration(),
-        child: GridView.builder(
-          padding: const EdgeInsets.all(4),
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: pads.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.1,
           ),
-          itemBuilder: (context, index) {
-            final pad = pads[index];
-            final Color color = pad['color'] as Color;
-            final bool active = pad['active'] as bool;
-            final bool hasAudio = pad['path'] != null;
-
-            return GestureDetector(
-              onTap: () => _playPad(index),
-              onDoubleTap: () => _loadAudio(index),
-              onSecondaryTap: () => _loadAudio(index),
-              onLongPress: () => _loadAudio(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 90),
-                decoration: BoxDecoration(
-                  color: active
-                      ? color.withValues(alpha: 0.55)
-                      : hasAudio
-                          ? color.withValues(alpha: 0.16)
-                          : const Color(0xFF20242C),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: active
-                        ? color
-                        : color.withValues(alpha: 0.55),
-                    width: active ? 2 : 1,
-                  ),
-                  boxShadow: active
-                      ? [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.22),
-                            blurRadius: 12,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            hasAudio
-                                ? Icons.graphic_eq
-                                : Icons.music_note_outlined,
-                            size: 20,
-                            color: active
-                                ? Colors.white
-                                : color.withValues(alpha: 0.9),
-                          ),
-                          const SizedBox(height: 7),
-                          Text(
-                            pad['name'] as String,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: active
-                                  ? Colors.white
-                                  : const Color(0xFFD3D8E0),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            'TECLA ${pad['key']}',
-                            style: const TextStyle(
-                              color: Color(0xFF9099A6),
-                              fontSize: 9,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (hasAudio)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Icon(
-                          Icons.check_circle,
-                          size: 12,
-                          color: color,
-                        ),
-                      ),
-                  ],
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(child: Text('Inicio: ${_formatTime(start)}')),
+              Expanded(
+                child: Text(
+                  'Final: ${_formatTime(end)}',
+                  textAlign: TextAlign.center,
                 ),
               ),
-            );
-          },
-        ),
+              Text('Ganancia: ${(gain * 100).round()}%'),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildRightPanel() {
-    return Expanded(
-      flex: 3,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(6, 12, 12, 12),
-        padding: const EdgeInsets.all(14),
-        decoration: _panelDecoration(),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _sectionTitle('ESPECTRO CANAL R'),
-            _buildAnimatedVisualizer(const Color(0xFF648BA8)),
-            const Divider(color: borderColor, height: 24),
-            _sectionTitle('ESTADO DEL TEMPO'),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 18,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D0F13),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: borderColor),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.speed, color: accentColor, size: 23),
-                  SizedBox(height: 8),
-                  Text(
-                    '128.0',
-                    style: TextStyle(
-                      color: Color(0xFFE1E5EB),
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    'BPM',
-                    style: TextStyle(
-                      color: Color(0xFF929BA8),
-                      fontSize: 10,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _sectionTitle('BANCO DE SONIDOS'),
-            Text(
-              '${pads.where((pad) => pad['path'] != null).length}'
-              ' / ${pads.length} sonidos cargados',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF929BA8),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
+  String _formatTime(double milliseconds) {
+    final seconds = (milliseconds / 1000).floor();
+    final tenths = ((milliseconds % 1000) / 100).floor();
+    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
+  }
+
+  BoxDecoration _decoration() {
+    return BoxDecoration(
+      color: panelColor,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: borderColor),
     );
   }
 
   Widget _buildStatusBar() {
     return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: const BoxDecoration(
-        color: Color(0xFF0D0F13),
+        color: panelColor,
         border: Border(top: BorderSide(color: borderColor)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.mouse_outlined,
-            size: 13,
-            color: accentColor,
-          ),
-          const SizedBox(width: 7),
+          const Icon(Icons.keyboard, size: 15, color: accentColor),
+          const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'CLIC: reproducir  •  DOBLE CLIC / CLIC DERECHO: cargar audio',
+              'Clic: reproducir  •  Doble clic o clic derecho: cargar audio',
+              style: TextStyle(color: Colors.white54, fontSize: 10),
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Color(0xFF929BA8),
-                fontSize: 10,
-              ),
             ),
           ),
-          const SizedBox(width: 8),
-          const Icon(
-            Icons.circle,
-            size: 7,
-            color: Color(0xFF739985),
-          ),
+          const Icon(Icons.circle, size: 7, color: Color(0xFF83C99B)),
           const SizedBox(width: 6),
           const Text(
-            'SAMPLER ACTIVO',
-            style: TextStyle(
-              color: Color(0xFF929BA8),
-              fontSize: 9,
-              letterSpacing: 0.7,
-            ),
+            'SAMPLER',
+            style: TextStyle(color: Colors.white54, fontSize: 10),
           ),
         ],
       ),
@@ -632,106 +838,158 @@ class _SamplerStudioState extends State<SamplerStudio>
   }
 }
 
-class _KnobControl extends StatefulWidget {
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
+class _AudioEditorDialog extends StatefulWidget {
+  final String padName;
+  final double duration;
+  final double initialStart;
+  final double initialEnd;
+  final double initialGain;
 
-  const _KnobControl({
-    required this.label,
-    required this.value,
-    required this.onChanged,
+  const _AudioEditorDialog({
+    required this.padName,
+    required this.duration,
+    required this.initialStart,
+    required this.initialEnd,
+    required this.initialGain,
   });
 
   @override
-  State<_KnobControl> createState() => _KnobControlState();
+  State<_AudioEditorDialog> createState() => _AudioEditorDialogState();
 }
 
-class _KnobControlState extends State<_KnobControl> {
-  late double _currentValue;
+class _AudioEditorDialogState extends State<_AudioEditorDialog> {
+  late double start;
+  late double end;
+  late double gain;
 
   @override
   void initState() {
     super.initState();
-    _currentValue = widget.value;
+    start = widget.initialStart;
+    end = widget.initialEnd;
+    gain = widget.initialGain;
   }
 
-  @override
-  void didUpdateWidget(covariant _KnobControl oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.value != widget.value) {
-      _currentValue = widget.value;
-    }
+  String formatTime(double milliseconds) {
+    final seconds = (milliseconds / 1000).floor();
+    final tenths = ((milliseconds % 1000) / 100).floor();
+    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onPanUpdate: (details) {
-            setState(() {
-              _currentValue = (_currentValue - details.delta.dy * 0.01)
-                  .clamp(0.0, 1.0)
-                  .toDouble();
+    final duration = widget.duration > 0 ? widget.duration : 1000.0;
+    final safeEnd = end.clamp(0.0, duration).toDouble();
 
-              widget.onChanged(_currentValue);
-            });
-          },
-          child: Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF242933),
-              border: Border.all(color: borderColor, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x44000000),
-                  blurRadius: 7,
-                  offset: Offset(2, 3),
-                ),
-              ],
-            ),
-            child: Transform.rotate(
-              angle: (_currentValue * 1.5 * math.pi) -
-                  (0.75 * math.pi),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Container(
-                  margin: const EdgeInsets.only(top: 5),
-                  width: 3,
-                  height: 13,
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+    return AlertDialog(
+      backgroundColor: panelColor,
+      title: Row(
+        children: [
+          const Icon(Icons.content_cut, color: accentColor),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Editar ${widget.padName}')),
+        ],
+      ),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'RECORTE DEL AUDIO',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                  fontSize: 11,
                 ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                'Inicio: ${formatTime(start)}',
+                style: const TextStyle(color: accentColor),
+              ),
+              Slider(
+                min: 0,
+                max: duration,
+                value: start.clamp(0.0, duration).toDouble(),
+                onChanged: (value) {
+                  setState(() {
+                    start = value;
+                    if (start >= end) {
+                      end = math.min(duration, start + 1);
+                    }
+                  });
+                },
+              ),
+              Text(
+                'Final: ${formatTime(safeEnd)}',
+                style: const TextStyle(color: accentColor),
+              ),
+              Slider(
+                min: 0,
+                max: duration,
+                value: safeEnd,
+                onChanged: (value) {
+                  setState(() {
+                    end = value;
+                    if (end <= start) {
+                      start = math.max(0, end - 1);
+                    }
+                  });
+                },
+              ),
+              const SizedBox(height: 10),
+              const Divider(color: borderColor),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.volume_up, color: accentColor),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Ganancia del pad',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Text('${(gain * 100).round()}%'),
+                ],
+              ),
+              Slider(
+                min: 0,
+                max: 1,
+                value: gain.clamp(0.0, 1.0).toDouble(),
+                onChanged: (value) => setState(() => gain = value),
+              ),
+              const Text(
+                'La ganancia controla el volumen de salida del pad.',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          widget.label,
-          style: const TextStyle(
-            color: Color(0xFFB9C1CC),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
         ),
-        const SizedBox(height: 3),
-        Text(
-          '${(_currentValue * 100).round()}%',
-          style: const TextStyle(
-            color: Color(0xFF929BA8),
-            fontSize: 10,
-          ),
+        FilledButton(
+          onPressed: () {
+            final parentState =
+                context.findAncestorStateOfType<_SamplerStudioState>();
+            parentState?._editorValues = {
+              'start': start,
+              'end': end,
+              'gain': gain,
+            };
+            Navigator.pop(context, true);
+          },
+          child: const Text('Guardar cambios'),
         ),
       ],
     );
   }
 }
+```
