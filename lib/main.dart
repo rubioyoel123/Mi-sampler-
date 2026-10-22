@@ -86,6 +86,10 @@ class _SamplerStudioState extends State<SamplerStudio> {
     {'name': 'SHOT 2', 'color': const Color(0xFFC0A66B), 'key': 'V', 'midi': 51},
   ];
 
+  String _fileName(String path) {
+    return path.split(RegExp(r'[/\\]')).last;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -135,18 +139,23 @@ class _SamplerStudioState extends State<SamplerStudio> {
         if (message is NoteOnMessage && message.velocity > 0) {
           final index =
               pads.indexWhere((pad) => pad['midi'] == message.note);
-          if (index != -1) _playPad(index);
+
+          if (index != -1) {
+            _playPad(index);
+          }
         }
       });
 
       if (midiDevices.isNotEmpty) {
         await _midiCommand.connectToDevice(midiDevices.first);
+
         if (mounted) {
           setState(() => midiStatus = 'MIDI conectado');
         }
       }
     } catch (e) {
       debugPrint('Error MIDI: $e');
+
       if (mounted) {
         setState(() => midiStatus = 'No se pudo conectar MIDI');
       }
@@ -157,6 +166,7 @@ class _SamplerStudioState extends State<SamplerStudio> {
     try {
       final devices = await _midiCommand.devices;
       if (!mounted) return;
+
       setState(() {
         midiDevices = devices ?? [];
         midiStatus = midiDevices.isEmpty
@@ -169,11 +179,14 @@ class _SamplerStudioState extends State<SamplerStudio> {
   }
 
   void _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent || event.repeat) return;
+    if (event is! KeyDownEvent) return;
 
     final key = event.logicalKey.keyLabel.toUpperCase();
     final index = pads.indexWhere((pad) => pad['key'] == key);
-    if (index != -1) _playPad(index);
+
+    if (index != -1) {
+      _playPad(index);
+    }
   }
 
   Future<void> _playPad(int index) async {
@@ -182,26 +195,37 @@ class _SamplerStudioState extends State<SamplerStudio> {
     final pad = pads[index];
     final path = pad['path'] as String?;
 
-    setState(() {
-      selectedPad = index;
-      pad['active'] = true;
-    });
+    if (mounted) {
+      setState(() {
+        selectedPad = index;
+        pad['active'] = true;
+      });
+    }
 
     Future.delayed(const Duration(milliseconds: 130), () {
-      if (mounted) setState(() => pad['active'] = false);
+      if (mounted) {
+        setState(() => pad['active'] = false);
+      }
     });
 
     if (path == null || !File(path).existsSync()) return;
 
     try {
       final player = pad['player'] as AudioPlayer;
+
       _stopTimer?.cancel();
 
       await player.stop();
+
       await player.setVolume(
-        (masterVolume * (pad['gain'] as double)).clamp(0.0, 1.0),
+        (masterVolume * (pad['gain'] as double))
+            .clamp(0.0, 1.0)
+            .toDouble(),
       );
-      await player.setPlaybackRate(masterPitch.clamp(0.5, 2.0));
+
+      await player.setPlaybackRate(
+        masterPitch.clamp(0.5, 2.0).toDouble(),
+      );
 
       final startMs = (pad['start'] as double).round();
       final endMs = (pad['end'] as double).round();
@@ -212,11 +236,16 @@ class _SamplerStudioState extends State<SamplerStudio> {
         await player.seek(Duration(milliseconds: startMs));
       }
 
-      if (endMs > 0 && endMs > startMs) {
+      if (endMs > startMs) {
         final remaining = (endMs - startMs) / masterPitch;
+
         _stopTimer = Timer(
-          Duration(milliseconds: remaining.round().clamp(1, 2147483647)),
-          () => player.stop(),
+          Duration(
+            milliseconds: remaining.round().clamp(1, 2147483647),
+          ),
+          () {
+            player.stop();
+          },
         );
       }
     } catch (e) {
@@ -225,11 +254,19 @@ class _SamplerStudioState extends State<SamplerStudio> {
   }
 
   Future<void> _loadAudio(int index) async {
-    try {
-      final file = await FilePicker.pickFile(type: FileType.audio);
-      if (!mounted || file == null || file.path == null) return;
+    if (index < 0 || index >= pads.length) return;
 
-      final path = file.path!;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) return;
+
+      final path = result.files.single.path;
+      if (path == null) return;
+
       final tempPlayer = AudioPlayer();
       Duration? duration;
 
@@ -242,6 +279,8 @@ class _SamplerStudioState extends State<SamplerStudio> {
         await tempPlayer.dispose();
       }
 
+      if (!mounted) return;
+
       final durationMs = (duration?.inMilliseconds ?? 0).toDouble();
 
       setState(() {
@@ -252,16 +291,22 @@ class _SamplerStudioState extends State<SamplerStudio> {
         selectedPad = index;
       });
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Audio cargado: ${_fileName(path)}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error cargando audio: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Audio cargado en ${pads[index]['name']}'),
-            duration: const Duration(seconds: 2),
+          const SnackBar(
+            content: Text('No se pudo cargar el audio.'),
           ),
         );
       }
-    } catch (e) {
-      debugPrint('Error cargando audio: $e');
     }
   }
 
@@ -270,12 +315,13 @@ class _SamplerStudioState extends State<SamplerStudio> {
 
     if (pad['path'] == null) {
       await _loadAudio(selectedPad);
+
       if (!mounted || pads[selectedPad]['path'] == null) return;
     }
 
-    final result = await showDialog<bool>(
+    final result = await showDialog<Map<String, double>>(
       context: context,
-      builder: (context) => _AudioEditorDialog(
+      builder: (dialogContext) => _AudioEditorDialog(
         padName: pad['name'] as String,
         duration: pad['duration'] as double,
         initialStart: pad['start'] as double,
@@ -286,20 +332,12 @@ class _SamplerStudioState extends State<SamplerStudio> {
 
     if (result == null || !mounted) return;
 
-    // El diálogo actualiza los valores mediante su propio resultado.
-    // Se leen de los controladores al confirmar usando _editorValues.
-    final values = _editorValues;
-    if (values != null) {
-      setState(() {
-        pad['start'] = values['start']!;
-        pad['end'] = values['end']!;
-        pad['gain'] = values['gain']!;
-      });
-    }
-    _editorValues = null;
+    setState(() {
+      pad['start'] = result['start'] ?? pad['start'];
+      pad['end'] = result['end'] ?? pad['end'];
+      pad['gain'] = result['gain'] ?? pad['gain'];
+    });
   }
-
-  Map<String, double>? _editorValues;
 
   void _openMidiSettings() {
     showDialog<void>(
@@ -320,13 +358,17 @@ class _SamplerStudioState extends State<SamplerStudio> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(midiStatus, style: const TextStyle(color: accentColor)),
+                Text(
+                  midiStatus,
+                  style: const TextStyle(color: accentColor),
+                ),
                 const SizedBox(height: 14),
                 const Text('Dispositivos detectados'),
                 const SizedBox(height: 8),
                 if (midiDevices.isEmpty)
                   const Text(
-                    'No hay dispositivos disponibles. Conecta tu controlador y actualiza.',
+                    'No hay dispositivos disponibles. '
+                    'Conecta tu controlador y actualiza.',
                     style: TextStyle(color: Colors.white60),
                   )
                 else
@@ -334,7 +376,9 @@ class _SamplerStudioState extends State<SamplerStudio> {
                     (device) => ListTile(
                       dense: true,
                       leading: const Icon(Icons.usb, color: accentColor),
-                      title: Text(device.name?.toString() ?? device.toString()),
+                      title: Text(
+                        device.name?.toString() ?? device.toString(),
+                      ),
                       subtitle: const Text('Controlador MIDI'),
                     ),
                   ),
@@ -355,7 +399,10 @@ class _SamplerStudioState extends State<SamplerStudio> {
             TextButton(
               onPressed: () async {
                 await _refreshMidi();
-                if (mounted) setDialogState(() {});
+
+                if (mounted) {
+                  setDialogState(() {});
+                }
               },
               child: const Text('Actualizar'),
             ),
@@ -381,22 +428,18 @@ class _SamplerStudioState extends State<SamplerStudio> {
             children: [
               _buildHeader(),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildMasterControls(),
-                          const SizedBox(height: 14),
-                          _buildPadsPanel(),
-                          const SizedBox(height: 14),
-                          _buildEditorPanel(),
-                        ],
-                      ),
-                    );
-                  },
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildMasterControls(),
+                      const SizedBox(height: 14),
+                      _buildPadsPanel(),
+                      const SizedBox(height: 14),
+                      _buildEditorPanel(),
+                    ],
+                  ),
                 ),
               ),
               _buildStatusBar(),
@@ -423,7 +466,11 @@ class _SamplerStudioState extends State<SamplerStudio> {
               color: accentColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.graphic_eq, color: accentColor, size: 27),
+            child: const Icon(
+              Icons.graphic_eq,
+              color: accentColor,
+              size: 27,
+            ),
           ),
           const SizedBox(width: 13),
           const Expanded(
@@ -500,7 +547,11 @@ class _SamplerStudioState extends State<SamplerStudio> {
             width: 250,
             child: Row(
               children: [
-                const Icon(Icons.volume_up, color: accentColor, size: 19),
+                const Icon(
+                  Icons.volume_up,
+                  color: accentColor,
+                  size: 19,
+                ),
                 Expanded(
                   child: Slider(
                     value: masterVolume,
@@ -566,7 +617,10 @@ class _SamplerStudioState extends State<SamplerStudio> {
               ),
               Text(
                 '${pads.where((p) => p['path'] != null).length}/16 cargados',
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -585,8 +639,13 @@ class _SamplerStudioState extends State<SamplerStudio> {
               final pad = pads[index];
               final color = pad['color'] as Color;
               final active = pad['active'] as bool;
-              final loaded = pad['path'] != null;
+              final path = pad['path'] as String?;
+              final loaded = path != null;
               final selected = selectedPad == index;
+
+              // Si hay audio, mostrar su nombre en el pad.
+              final displayName =
+                  loaded ? _fileName(path!) : pad['name'] as String;
 
               return GestureDetector(
                 onTap: () => _playPad(index),
@@ -629,16 +688,16 @@ class _SamplerStudioState extends State<SamplerStudio> {
                         ],
                       ),
                       Text(
-                        pad['name'] as String,
-                        maxLines: 1,
+                        displayName,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
-                        loaded ? 'Audio cargado' : 'Doble clic: cargar',
+                        loaded ? 'Cargado' : 'Doble clic: cargar',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -659,7 +718,8 @@ class _SamplerStudioState extends State<SamplerStudio> {
 
   Widget _buildEditorPanel() {
     final pad = pads[selectedPad];
-    final loaded = pad['path'] != null;
+    final path = pad['path'] as String?;
+    final loaded = path != null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -693,11 +753,14 @@ class _SamplerStudioState extends State<SamplerStudio> {
           const SizedBox(height: 8),
           Text(
             loaded
-                ? (pad['path'] as String).split(Platform.pathSeparator).last
+                ? _fileName(path!)
                 : 'Selecciona un pad y carga un archivo de audio',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+            ),
           ),
           const SizedBox(height: 12),
           if (loaded) ...[
@@ -758,13 +821,14 @@ class _SamplerStudioState extends State<SamplerStudio> {
         children: [
           Row(
             children: List.generate(48, (i) {
-              final h = 8 + (math.sin(i * 1.7).abs() * 23);
+              final height = 8 + (math.sin(i * 1.7).abs() * 23);
               final time = duration * i / 48;
-              final inRange = time >= start && (end <= 0 || time <= end);
+              final inRange =
+                  time >= start && (end <= 0 || time <= end);
 
               return Expanded(
                 child: Container(
-                  height: h,
+                  height: height,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
                     color: inRange
@@ -797,7 +861,9 @@ class _SamplerStudioState extends State<SamplerStudio> {
   String _formatTime(double milliseconds) {
     final seconds = (milliseconds / 1000).floor();
     final tenths = ((milliseconds % 1000) / 100).floor();
-    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
+
+    return '${seconds ~/ 60}:'
+        '${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
   }
 
   BoxDecoration _decoration() {
@@ -822,15 +888,25 @@ class _SamplerStudioState extends State<SamplerStudio> {
           const Expanded(
             child: Text(
               'Clic: reproducir  •  Doble clic o clic derecho: cargar audio',
-              style: TextStyle(color: Colors.white54, fontSize: 10),
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Icon(Icons.circle, size: 7, color: Color(0xFF83C99B)),
+          const Icon(
+            Icons.circle,
+            size: 7,
+            color: Color(0xFF83C99B),
+          ),
           const SizedBox(width: 6),
           const Text(
             'SAMPLER',
-            style: TextStyle(color: Colors.white54, fontSize: 10),
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -873,12 +949,15 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
   String formatTime(double milliseconds) {
     final seconds = (milliseconds / 1000).floor();
     final tenths = ((milliseconds % 1000) / 100).floor();
-    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
+
+    return '${seconds ~/ 60}:'
+        '${(seconds % 60).toString().padLeft(2, '0')}.$tenths';
   }
 
   @override
   Widget build(BuildContext context) {
     final duration = widget.duration > 0 ? widget.duration : 1000.0;
+    final safeStart = start.clamp(0.0, duration).toDouble();
     final safeEnd = end.clamp(0.0, duration).toDouble();
 
     return AlertDialog(
@@ -907,18 +986,19 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Inicio: ${formatTime(start)}',
+                'Inicio: ${formatTime(safeStart)}',
                 style: const TextStyle(color: accentColor),
               ),
               Slider(
                 min: 0,
                 max: duration,
-                value: start.clamp(0.0, duration).toDouble(),
+                value: safeStart,
                 onChanged: (value) {
                   setState(() {
                     start = value;
+
                     if (start >= end) {
-                      end = math.min(duration, start + 1);
+                      end = math.min(duration, start + 1).toDouble();
                     }
                   });
                 },
@@ -934,8 +1014,9 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
                 onChanged: (value) {
                   setState(() {
                     end = value;
+
                     if (end <= start) {
-                      start = math.max(0, end - 1);
+                      start = math.max(0.0, end - 1).toDouble();
                     }
                   });
                 },
@@ -960,11 +1041,16 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
                 min: 0,
                 max: 1,
                 value: gain.clamp(0.0, 1.0).toDouble(),
-                onChanged: (value) => setState(() => gain = value),
+                onChanged: (value) {
+                  setState(() => gain = value);
+                },
               ),
               const Text(
                 'La ganancia controla el volumen de salida del pad.',
-                style: TextStyle(color: Colors.white54, fontSize: 11),
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -972,19 +1058,19 @@ class _AudioEditorDialogState extends State<_AudioEditorDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancelar'),
         ),
         FilledButton(
           onPressed: () {
-            final parentState =
-                context.findAncestorStateOfType<_SamplerStudioState>();
-            parentState?._editorValues = {
-              'start': start,
-              'end': end,
-              'gain': gain,
-            };
-            Navigator.pop(context, true);
+            Navigator.pop(
+              context,
+              <String, double>{
+                'start': start,
+                'end': end,
+                'gain': gain,
+              },
+            );
           },
           child: const Text('Guardar cambios'),
         ),
