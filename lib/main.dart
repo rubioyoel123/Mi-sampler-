@@ -1,416 +1,244 @@
+
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:libremidi_flutter/libremidi_flutter.dart';
+import 'package:flutter_midi_command/flutter_midi_command.dart';
 
 void main() {
-  runApp(const SamplerPerreoApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MiSamplerApp());
 }
 
-class SamplerPerreoApp extends StatelessWidget {
-  const SamplerPerreoApp({super.key});
+const Color bgColor = Color(0xFF111318);
+const Color panelColor = Color(0xFF191C23);
+const Color borderColor = Color(0xFF303640);
+const Color accentColor = Color(0xFF7297B5);
+
+class MiSamplerApp extends StatelessWidget {
+  const MiSamplerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Sampler Perreo',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF101018),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: bgColor,
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFFF1744),
-          secondary: Color(0xFFFF9100),
+          primary: accentColor,
+          surface: panelColor,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: panelColor,
+          foregroundColor: Color(0xFFE1E5EB),
+          elevation: 0,
+          centerTitle: false,
+        ),
+        sliderTheme: const SliderThemeData(
+          activeTrackColor: accentColor,
+          thumbColor: accentColor,
+          inactiveTrackColor: borderColor,
         ),
       ),
-      home: const SamplerHome(),
+      home: const SamplerStudio(),
     );
   }
 }
 
-class SamplerHome extends StatefulWidget {
-  const SamplerHome({super.key});
+class SamplerStudio extends StatefulWidget {
+  const SamplerStudio({super.key});
 
   @override
-  State<SamplerHome> createState() => _SamplerHomeState();
+  State<SamplerStudio> createState() => _SamplerStudioState();
 }
 
-class _SamplerHomeState extends State<SamplerHome> {
-  static const int padCount = 16;
-
-  final List<AudioPlayer> _players =
-      List.generate(padCount, (_) => AudioPlayer());
-
-  final List<String?> _audioPaths =
-      List<String?>.filled(padCount, null);
-
-  final List<String> _audioNames =
-      List<String>.filled(padCount, '');
-
-  final List<bool> _playing =
-      List<bool>.filled(padCount, false);
-
-  final Map<LogicalKeyboardKey, int> _keyboardMap = {
-    LogicalKeyboardKey.digit1: 0,
-    LogicalKeyboardKey.digit2: 1,
-    LogicalKeyboardKey.digit3: 2,
-    LogicalKeyboardKey.digit4: 3,
-    LogicalKeyboardKey.digit5: 4,
-    LogicalKeyboardKey.digit6: 5,
-    LogicalKeyboardKey.digit7: 6,
-    LogicalKeyboardKey.digit8: 7,
-    LogicalKeyboardKey.digit9: 8,
-    LogicalKeyboardKey.digit0: 9,
-    LogicalKeyboardKey.keyQ: 10,
-    LogicalKeyboardKey.keyW: 11,
-    LogicalKeyboardKey.keyE: 12,
-    LogicalKeyboardKey.keyR: 13,
-    LogicalKeyboardKey.keyA: 14,
-    LogicalKeyboardKey.keyS: 15,
-  };
-
-  final List<String> _keyLabels = [
-    '1', '2', '3', '4',
-    '5', '6', '7', '8',
-    '9', '0', 'Q', 'W',
-    'E', 'R', 'A', 'S',
-  ];
-
-  List<dynamic> _midiPorts = [];
-
-  dynamic _midiInput;
+class _SamplerStudioState extends State<SamplerStudio>
+    with TickerProviderStateMixin {
+  final FocusNode _focusNode = FocusNode();
+  final MidiCommand _midiCommand = MidiCommand();
 
   StreamSubscription<dynamic>? _midiSubscription;
-  StreamSubscription<dynamic>? _hotplugSubscription;
 
-  String _midiStatus = 'MIDI desconectado';
-  String _message = 'Carga tus sonidos MP3';
+  double masterVolume = 1.0;
+  double masterPitch = 1.0;
 
-  bool _loadingMidi = false;
+  late final AnimationController _visualizerController;
+
+  final List<Map<String, dynamic>> pads = [
+    {'name': 'KICK', 'color': const Color(0xFFB98553), 'key': '1', 'midi': 36},
+    {'name': 'SNARE', 'color': const Color(0xFFB98553), 'key': '2', 'midi': 37},
+    {'name': 'HI-HAT', 'color': const Color(0xFFB98553), 'key': '3', 'midi': 38},
+    {'name': 'CLAP', 'color': const Color(0xFFB98553), 'key': '4', 'midi': 39},
+    {'name': 'LOOP 1', 'color': const Color(0xFF648BA8), 'key': 'Q', 'midi': 40},
+    {'name': 'LOOP 2', 'color': const Color(0xFF648BA8), 'key': 'W', 'midi': 41},
+    {'name': 'SAMPLE 1', 'color': const Color(0xFF648BA8), 'key': 'E', 'midi': 42},
+    {'name': 'SAMPLE 2', 'color': const Color(0xFF739985), 'key': 'R', 'midi': 43},
+    {'name': 'SYNTH', 'color': const Color(0xFF739985), 'key': 'A', 'midi': 44},
+    {'name': 'BASS', 'color': const Color(0xFF739985), 'key': 'S', 'midi': 45},
+    {'name': 'VOX 1', 'color': const Color(0xFF739985), 'key': 'D', 'midi': 46},
+    {'name': 'VOX 2', 'color': const Color(0xFF739985), 'key': 'F', 'midi': 47},
+    {'name': 'FX 1', 'color': const Color(0xFF9381AA), 'key': 'Z', 'midi': 48},
+    {'name': 'FX 2', 'color': const Color(0xFF9381AA), 'key': 'X', 'midi': 49},
+    {'name': 'SHOT 1', 'color': const Color(0xFFB49B62), 'key': 'C', 'midi': 50},
+    {'name': 'SHOT 2', 'color': const Color(0xFFB49B62), 'key': 'V', 'midi': 51},
+  ];
 
   @override
   void initState() {
     super.initState();
-    _refreshMidiPorts();
 
-    try {
-      _hotplugSubscription =
-          LibremidiFlutter.onHotplug.listen((_) {
-        _refreshMidiPorts();
-      });
-    } catch (_) {
-      // La aplicación seguirá funcionando sin detección automática.
-    }
-  }
-
-  Future<void> _refreshMidiPorts() async {
-    try {
-      final ports = LibremidiFlutter.getInputPorts();
-
-      if (!mounted) return;
-
-      setState(() {
-        _midiPorts = List<dynamic>.from(ports);
-        if (_midiPorts.isEmpty && _midiInput == null) {
-          _midiStatus = 'No se encontraron entradas MIDI';
-        } else if (_midiInput == null) {
-          _midiStatus =
-              'Controladores encontrados: ${_midiPorts.length}';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _midiStatus = 'No se pudieron buscar dispositivos MIDI';
-      });
-    }
-  }
-
-  Future<void> _connectMidi(dynamic port) async {
-    if (_loadingMidi) return;
-
-    setState(() {
-      _loadingMidi = true;
-      _midiStatus = 'Conectando MIDI...';
-    });
-
-    try {
-      await _midiSubscription?.cancel();
-      _midiSubscription = null;
-
-      if (_midiInput != null) {
-        try {
-          LibremidiFlutter.disconnectInput(_midiInput);
-        } catch (_) {}
-        _midiInput = null;
-      }
-
-      final input = LibremidiFlutter.openInput(port);
-
-      _midiInput = input;
-
-      _midiSubscription = input.messages.listen(
-        (dynamic event) {
-          if (event.isNoteOn && event.velocity > 0) {
-            final int note = event.note;
-
-            // Notas MIDI 36 a 51 disparan los 16 pads.
-            if (note >= 36 && note <= 51) {
-              _playPad(note - 36);
-            }
-          } else if (event.isControlChange) {
-            final int controller = event.controller;
-
-            // CC 0 a 15 disparan los 16 pads.
-            if (event.value > 0 &&
-                controller >= 0 &&
-                controller < padCount) {
-              _playPad(controller);
-            }
-          }
-        },
-        onError: (Object error) {
-          if (!mounted) return;
-          setState(() {
-            _midiStatus = 'Error recibiendo MIDI';
-          });
-        },
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _midiStatus = 'MIDI conectado: ${port.displayName}';
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _midiStatus = 'No se pudo conectar el dispositivo MIDI';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingMidi = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _disconnectMidi() async {
-    await _midiSubscription?.cancel();
-    _midiSubscription = null;
-
-    if (_midiInput != null) {
-      try {
-        LibremidiFlutter.disconnectInput(_midiInput);
-      } catch (_) {}
-
-      _midiInput = null;
+    for (final pad in pads) {
+      pad['player'] = AudioPlayer();
+      pad['path'] = null;
+      pad['active'] = false;
     }
 
-    if (!mounted) return;
+    _visualizerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat();
 
-    setState(() {
-      _midiStatus = 'MIDI desconectado';
-    });
+    _initMidi();
   }
 
-  Future<void> _loadSound(int index) async {
+  @override
+  void dispose() {
+    _midiSubscription?.cancel();
+    _focusNode.dispose();
+    _visualizerController.dispose();
+
+    for (final pad in pads) {
+      (pad['player'] as AudioPlayer).dispose();
+    }
+
+    super.dispose();
+  }
+
+  Future<void> _initMidi() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['mp3'],
-        allowMultiple: false,
-      );
+      final List<MidiDevice>? devices = await _midiCommand.devices;
 
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      final path = file.path;
-
-      if (path == null || path.isEmpty) {
-        if (!mounted) return;
-
-        setState(() {
-          _message = 'No se pudo abrir el archivo seleccionado';
-        });
+      if (!mounted || devices == null || devices.isEmpty) {
         return;
       }
 
-      await _players[index].stop();
+      await _midiCommand.connectToDevice(devices.first);
 
-      if (!mounted) return;
+      _midiSubscription =
+          _midiCommand.onMidiDataReceived?.listen((event) {
+        final data = event.data;
 
-      setState(() {
-        _audioPaths[index] = path;
-        _audioNames[index] = file.name;
-        _playing[index] = false;
-        _message = 'Sonido cargado en PAD ${index + 1}';
+        if (data.length < 3) return;
+
+        final int status = data[0] & 0xF0;
+        final int note = data[1];
+        final int velocity = data[2];
+
+        if (status == 0x90 && velocity > 0) {
+          final int index =
+              pads.indexWhere((pad) => pad['midi'] == note);
+
+          if (index != -1 && mounted) {
+            _playPad(index);
+          }
+        }
       });
     } catch (e) {
-      if (!mounted) return;
+      debugPrint('No se pudo conectar el dispositivo MIDI: $e');
+    }
+  }
 
-      setState(() {
-        _message = 'Error al cargar el MP3';
-      });
+  void _handleKeyEvent(RawKeyEvent event) {
+    if (event is! RawKeyDownEvent || event.repeat) return;
+
+    final String key = event.logicalKey.keyLabel.toUpperCase();
+
+    final int index =
+        pads.indexWhere((pad) => pad['key'] == key);
+
+    if (index != -1) {
+      _playPad(index);
     }
   }
 
   Future<void> _playPad(int index) async {
-    if (index < 0 || index >= padCount) return;
+    if (index < 0 || index >= pads.length) return;
 
-    final path = _audioPaths[index];
+    final pad = pads[index];
+    final AudioPlayer player = pad['player'] as AudioPlayer;
+    final String? path = pad['path'] as String?;
 
-    if (path == null || path.isEmpty) {
-      if (!mounted) return;
-
-      setState(() {
-        _message = 'Primero carga un MP3 en PAD ${index + 1}';
-      });
-      return;
+    if (mounted) {
+      setState(() => pad['active'] = true);
     }
 
-    try {
-      await _players[index].stop();
-      await _players[index].play(DeviceFileSource(path));
-
-      if (!mounted) return;
-
-      setState(() {
-        _playing[index] = true;
-        _message = 'Reproduciendo PAD ${index + 1}';
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _playing[index] = false;
-        _message = 'Error reproduciendo PAD ${index + 1}';
-      });
-    }
-  }
-
-  Future<void> _stopPad(int index) async {
-    try {
-      await _players[index].stop();
-
-      if (!mounted) return;
-
-      setState(() {
-        _playing[index] = false;
-        _message = 'PAD ${index + 1} detenido';
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _stopAll() async {
-    for (int i = 0; i < padCount; i++) {
-      try {
-        await _players[i].stop();
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      for (int i = 0; i < padCount; i++) {
-        _playing[i] = false;
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) {
+        setState(() => pad['active'] = false);
       }
-      _message = 'Todos los pads detenidos';
     });
+
+    if (path == null) return;
+
+    try {
+      await player.setVolume(masterVolume);
+      await player.setPlaybackRate(masterPitch);
+      await player.stop();
+      await player.play(DeviceFileSource(path));
+    } catch (e) {
+      debugPrint('Error al reproducir el sonido: $e');
+    }
   }
 
-  KeyEventResult _handleKeyEvent(
-    FocusNode node,
-    KeyEvent event,
-  ) {
-    if (event is! KeyDownEvent) {
-      return KeyEventResult.ignored;
+  Future<void> _loadAudio(int index) async {
+    try {
+      final FilePickerResult? result =
+          await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final String? path = result.files.single.path;
+
+      if (path != null) {
+        setState(() {
+          pads[index]['path'] = path;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar el audio: $e');
     }
-
-    final index = _keyboardMap[event.logicalKey];
-
-    if (index == null) {
-      return KeyEventResult.ignored;
-    }
-
-    _playPad(index);
-    return KeyEventResult.handled;
   }
 
-  Widget _buildPad(int index) {
-    final hasSound = _audioPaths[index] != null;
-    final isPlaying = _playing[index];
-
-    return Card(
-      color: isPlaying
-          ? const Color(0xFFFF1744)
-          : const Color(0xFF242434),
-      elevation: 5,
-      child: InkWell(
-        onTap: () => _playPad(index),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
+  @override
+  Widget build(BuildContext context) {
+    return RawKeyboardListener(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKey: _handleKeyEvent,
+      child: Scaffold(
+        appBar: _buildTopBar(),
+        body: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                isPlaying ? Icons.graphic_eq : Icons.music_note,
-                size: 30,
-                color: hasSound
-                    ? Colors.orangeAccent
-                    : Colors.white54,
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'PAD ${index + 1}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              Expanded(
+                child: Row(
+                  children: [
+                    _buildLeftPanel(),
+                    _buildPadsArea(),
+                    _buildRightPanel(),
+                  ],
                 ),
               ),
-              Text(
-                'TECLA ${_keyLabels[index]}',
-                style: const TextStyle(fontSize: 11),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                hasSound ? _audioNames[index] : 'Sin MP3',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 10),
-              ),
-              const SizedBox(height: 5),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 2,
-                children: [
-                  IconButton(
-                    tooltip: 'Cargar MP3',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _loadSound(index),
-                    icon: const Icon(
-                      Icons.folder_open,
-                      size: 20,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Detener sonido',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _stopPad(index),
-                    icon: const Icon(
-                      Icons.stop_circle_outlined,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
+              _buildStatusBar(),
             ],
           ),
         ),
@@ -418,93 +246,513 @@ class _SamplerHomeState extends State<SamplerHome> {
     );
   }
 
+  PreferredSizeWidget _buildTopBar() {
+    return AppBar(
+      toolbarHeight: 60,
+      title: const Row(
+        children: [
+          Icon(Icons.graphic_eq, color: accentColor, size: 27),
+          SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SAMPLER PERREO',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'DJ DANNYS YOEL',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF929BA8),
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        const Center(
+          child: Text(
+            'WINDOWS  •  AUDIO',
+            style: TextStyle(
+              fontSize: 10,
+              color: Color(0xFF929BA8),
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(width: 18),
+        IconButton(
+          tooltip: 'Estado del sampler',
+          icon: const Icon(
+            Icons.circle,
+            color: Color(0xFF739985),
+            size: 11,
+          ),
+          onPressed: () {},
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+
+  Widget _buildLeftPanel() {
+    return Expanded(
+      flex: 3,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 12, 6, 12),
+        padding: const EdgeInsets.all(14),
+        decoration: _panelDecoration(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _sectionTitle('ESPECTRO CANAL L'),
+            _buildAnimatedVisualizer(accentColor),
+            const Divider(color: borderColor, height: 24),
+            _sectionTitle('CONTROLES MAESTROS'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _KnobControl(
+                  label: 'VOLUME',
+                  value: masterVolume,
+                  onChanged: (value) {
+                    setState(() => masterVolume = value);
+                  },
+                ),
+                _KnobControl(
+                  label: 'PITCH',
+                  value: masterPitch,
+                  onChanged: (value) {
+                    setState(() => masterPitch = value);
+                  },
+                ),
+              ],
+            ),
+            Text(
+              'VOL ${(masterVolume * 100).round()}%   '
+              'PITCH ${(masterPitch * 100).round()}%',
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF929BA8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Color(0xFFB9C1CC),
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+      ),
+    );
+  }
+
+  BoxDecoration _panelDecoration() {
+    return BoxDecoration(
+      color: panelColor,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: borderColor),
+    );
+  }
+
+  Widget _buildAnimatedVisualizer(Color color) {
+    return Container(
+      height: 120,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 10,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0F13),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: borderColor),
+      ),
+      child: AnimatedBuilder(
+        animation: _visualizerController,
+        builder: (context, child) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(16, (index) {
+              final double waveHeight =
+                  math.sin(
+                    _visualizerController.value *
+                            2 *
+                            math.pi +
+                        index * 0.55,
+                  ) *
+                  0.5 +
+                  0.5;
+
+              return Flexible(
+                child: Container(
+                  width: 6,
+                  height: 12 + waveHeight * 75,
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(
+                      0.35 + waveHeight * 0.45,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPadsArea() {
+    return Expanded(
+      flex: 5,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(6, 12, 6, 12),
+        padding: const EdgeInsets.all(10),
+        decoration: _panelDecoration(),
+        child: GridView.builder(
+          padding: const EdgeInsets.all(4),
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: pads.length,
+          gridDelegate:
+              const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.1,
+          ),
+          itemBuilder: (context, index) {
+            final pad = pads[index];
+            final Color color = pad['color'] as Color;
+            final bool active = pad['active'] as bool;
+            final bool hasAudio = pad['path'] != null;
+
+            return GestureDetector(
+              onTapDown: (_) => _playPad(index),
+              onDoubleTap: () => _loadAudio(index),
+              onSecondaryTap: () => _loadAudio(index),
+              onLongPress: () => _loadAudio(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 90),
+                decoration: BoxDecoration(
+                  color: active
+                      ? color.withOpacity(0.55)
+                      : hasAudio
+                          ? color.withOpacity(0.16)
+                          : const Color(0xFF20242C),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: active ? color : color.withOpacity(0.55),
+                    width: active ? 2 : 1,
+                  ),
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: color.withOpacity(0.22),
+                            blurRadius: 12,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            hasAudio
+                                ? Icons.graphic_eq
+                                : Icons.music_note_outlined,
+                            size: 20,
+                            color: active
+                                ? Colors.white
+                                : color.withOpacity(0.9),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            pad['name'] as String,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: active
+                                  ? Colors.white
+                                  : const Color(0xFFD3D8E0),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'TECLA ${pad['key']}',
+                            style: const TextStyle(
+                              color: Color(0xFF9099A6),
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasAudio)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Icon(
+                          Icons.check_circle,
+                          size: 12,
+                          color: color,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRightPanel() {
+    return Expanded(
+      flex: 3,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(6, 12, 12, 12),
+        padding: const EdgeInsets.all(14),
+        decoration: _panelDecoration(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _sectionTitle('ESPECTRO CANAL R'),
+            _buildAnimatedVisualizer(
+              const Color(0xFF648BA8),
+            ),
+            const Divider(color: borderColor, height: 24),
+            _sectionTitle('ESTADO DEL TEMPO'),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 18,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D0F13),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: borderColor),
+              ),
+              child: const Column(
+                children: [
+                  Icon(
+                    Icons.speed,
+                    color: accentColor,
+                    size: 23,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '128.0',
+                    style: TextStyle(
+                      color: Color(0xFFE1E5EB),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'BPM',
+                    style: TextStyle(
+                      color: Color(0xFF929BA8),
+                      fontSize: 10,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _sectionTitle('BANCO DE SONIDOS'),
+            Text(
+              '${pads.where((pad) => pad['path'] != null).length}'
+              ' / ${pads.length} sonidos cargados',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF929BA8),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBar() {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D0F13),
+        border: Border(
+          top: BorderSide(color: borderColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.mouse_outlined,
+            size: 13,
+            color: accentColor,
+          ),
+          const SizedBox(width: 7),
+          const Expanded(
+            child: Text(
+              'CLIC: reproducir  •  DOBLE CLIC / CLIC DERECHO: cargar audio',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Color(0xFF929BA8),
+                fontSize: 10,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.circle,
+            size: 7,
+            color: Color(0xFF739985),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'SAMPLER ACTIVO',
+            style: TextStyle(
+              color: Color(0xFF929BA8),
+              fontSize: 9,
+              letterSpacing: 0.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KnobControl extends StatefulWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  const _KnobControl({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
   @override
-  void dispose() {
-    _midiSubscription?.cancel();
-    _hotplugSubscription?.cancel();
+  State<_KnobControl> createState() => _KnobControlState();
+}
 
-    if (_midiInput != null) {
-      try {
-        LibremidiFlutter.disconnectInput(_midiInput);
-      } catch (_) {}
+class _KnobControlState extends State<_KnobControl> {
+  late double _currentValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentValue = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(covariant _KnobControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.value != widget.value) {
+      _currentValue = widget.value;
     }
-
-    for (final player in _players) {
-      unawaited(player.dispose());
-    }
-
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      autofocus: true,
-      onKeyEvent: _handleKeyEvent,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'SAMPLER PERREO',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onPanUpdate: (details) {
+            setState(() {
+              _currentValue = (_currentValue -
+                      details.delta.dy * 0.01)
+                  .clamp(0.0, 1.0)
+                  .toDouble();
+
+              widget.onChanged(_currentValue);
+            });
+          },
+          child: Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF242933),
+              border: Border.all(color: borderColor, width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x44000000),
+                  blurRadius: 7,
+                  offset: Offset(2, 3),
+                ),
+              ],
+            ),
+            child: Transform.rotate(
+              angle: (_currentValue * 1.5 * math.pi) -
+                  (0.75 * math.pi),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  margin: const EdgeInsets.only(top: 5),
+                  width: 3,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
             ),
           ),
-          centerTitle: true,
-          backgroundColor: const Color(0xFF1B1B2A),
         ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    const Text(
-                      '16 PADS • MP3 • TECLADO • MIDI',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orangeAccent,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _midiStatus,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButton<dynamic>(
-                            isExpanded: true,
-                            hint: const Text('Elegir controlador MIDI'),
-                            value: null,
-                            items: _midiPorts.map((dynamic port) {
-                              return DropdownMenuItem<dynamic>(
-                                value: port,
-                                child: Text(
-                                  '${port.displayName}',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: _loadingMidi
-                                ? null
-                                : (dynamic port) {
-                                    if (port != null) {
-                                      _connectMidi(port);
-                                    }
-                                  },
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Buscar controladores MIDI',
-                          onPressed: _refreshMidiPorts,
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap
+        const SizedBox(height: 8),
+        Text(
+          widget.label,
+          style: const TextStyle(
+            color: Color(0xFFB9C1CC),
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${(_currentValue * 100).round()}%',
+          style: const TextStyle(
+            color: Color(0xFF929BA8),
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+}
