@@ -32,9 +32,6 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar Sampler Perreo
-        run: flutter build windows --release
-
       - name: Guardar aplicación compilada
         uses: actions/upload-artifact@v4
         with:
