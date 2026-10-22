@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -223,12 +222,14 @@ class _SamplerHomeState extends State<SamplerHome> {
         type: FileType.audio,
       );
 
-      if (files.isEmpty || files.first.path == null) {
+      if (files == null ||
+          files.files.isEmpty ||
+          files.files.first.path == null) {
         _showStatus('No seleccionaste ningún audio');
         return;
       }
 
-      final selectedFile = files.first;
+      final selectedFile = files.files.first;
       final copiedPath = await _copyAudioToLibrary(selectedFile.path!);
 
       setState(() {
@@ -330,6 +331,20 @@ class _SamplerHomeState extends State<SamplerHome> {
           ),
           backgroundColor: const Color(0xFF191923),
           actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8, top: 4),
+              child: Center(
+                child: Text(
+                  'DJ DANNYS YOEL',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.28),
+                    fontSize: 7,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ),
             IconButton(
               tooltip: 'Detener todos los audios',
               onPressed: _stopAll,
@@ -372,12 +387,12 @@ class _SamplerHomeState extends State<SamplerHome> {
         children: [
           const Expanded(
             child: Text(
-              'DJ DANNYS YOEL',
+              'CONTROLES MAESTROS',
               style: TextStyle(
                 color: Colors.cyanAccent,
-                fontSize: 15,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1,
+                letterSpacing: 0.7,
               ),
             ),
           ),
