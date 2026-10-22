@@ -73,7 +73,6 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool echoEnabled = false;
   bool reverbEnabled = false;
   bool flangerEnabled = false;
-  bool bassEnabled = false;
 
   final List<List<SamplePad>> banks = List.generate(
     4,
@@ -122,7 +121,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       }
     }
 
-    if (_audioReady) { audio.disposeAllSound(); audio.deinit(); }
+    if (_audioReady) { audio.deinit(); }
     super.dispose();
   }
 
@@ -140,7 +139,6 @@ class _SamplerHomeState extends State<SamplerHome> {
         echoEnabled = prefs.getBool('fx_echo') ?? false;
         reverbEnabled = prefs.getBool('fx_reverb') ?? false;
         flangerEnabled = prefs.getBool('fx_flanger') ?? false;
-        bassEnabled = prefs.getBool('fx_bass') ?? false;
         for (int b = 0; b < banks.length; b++) {
           for (int i = 0; i < banks[b].length; i++) {
             final pad = banks[b][i];
@@ -167,7 +165,6 @@ class _SamplerHomeState extends State<SamplerHome> {
       await prefs.setBool('fx_echo', echoEnabled);
       await prefs.setBool('fx_reverb', reverbEnabled);
       await prefs.setBool('fx_flanger', flangerEnabled);
-      await prefs.setBool('fx_bass', bassEnabled);
 
       for (int b = 0; b < banks.length; b++) {
         for (int i = 0; i < banks[b].length; i++) {
@@ -228,11 +225,6 @@ class _SamplerHomeState extends State<SamplerHome> {
       filters.flangerFilter.activate();
     } else {
       filters.flangerFilter.deactivate();
-    }
-    if (bassEnabled) {
-      filters.bassboostFilter.activate();
-    } else {
-      filters.bassboostFilter.deactivate();
     }
   }
 
@@ -547,7 +539,6 @@ final selectedFile = files.first;
             const SizedBox(width: 4),
             effect('FLANGER', flangerEnabled, (v) => flangerEnabled = v),
             const SizedBox(width: 4),
-            effect('BAJOS', bassEnabled, (v) => bassEnabled = v),
           ]),
         ],
       ),
