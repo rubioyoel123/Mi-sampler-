@@ -222,14 +222,12 @@ class _SamplerHomeState extends State<SamplerHome> {
         type: FileType.audio,
       );
 
-      if (files == null ||
-          files.files.isEmpty ||
-          files.files.first.path == null) {
-        _showStatus('No seleccionaste ningún audio');
-        return;
-      }
+      if (files.isEmpty || files.first.path == null) {
+  _showStatus('No seleccionaste ningún audio');
+  return;
+}
 
-      final selectedFile = files.files.first;
+final selectedFile = files.first;
       final copiedPath = await _copyAudioToLibrary(selectedFile.path!);
 
       setState(() {
