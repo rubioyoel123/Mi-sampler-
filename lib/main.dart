@@ -1,6 +1,6 @@
 
-import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,22 +54,7 @@ class SamplePad {
   double volume = 1.0;
   double pitch = 1.0;
   bool active = false;
-
   AudioPlayer? player;
-
-  Map<String, dynamic> toJson() => {
-        'audioPath': audioPath,
-        'audioName': audioName,
-        'volume': volume,
-        'pitch': pitch,
-      };
-
-  void loadJson(Map<String, dynamic> json) {
-    audioPath = json['audioPath'] as String?;
-    audioName = json['audioName'] as String?;
-    volume = (json['volume'] as num?)?.toDouble() ?? 1.0;
-    pitch = (json['pitch'] as num?)?.toDouble() ?? 1.0;
-  }
 }
 
 class SamplerHome extends StatefulWidget {
@@ -103,8 +88,6 @@ class _SamplerHomeState extends State<SamplerHome> {
   double masterVolume = 0.8;
   double masterPitch = 1.0;
   int selectedBank = 0;
-  bool midiLearn = false;
-  int? learningPad;
   String status = 'Listo para mezclar';
   List<MidiDevice> midiDevices = [];
 
@@ -119,9 +102,11 @@ class _SamplerHomeState extends State<SamplerHome> {
   void dispose() {
     midiSubscription?.cancel();
     keyboardFocus.dispose();
+
     for (final pad in pads) {
       pad.player?.dispose();
     }
+
     super.dispose();
   }
 
@@ -136,17 +121,14 @@ class _SamplerHomeState extends State<SamplerHome> {
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
 
         for (int i = 0; i < pads.length; i++) {
-          final path = prefs.getString('pad_$i');
-          final name = prefs.getString('pad_name_$i');
-
-          pads[i].audioPath = path;
-          pads[i].audioName = name;
+          pads[i].audioPath = prefs.getString('pad_$i');
+          pads[i].audioName = prefs.getString('pad_name_$i');
           pads[i].volume = prefs.getDouble('pad_volume_$i') ?? 1.0;
           pads[i].pitch = prefs.getDouble('pad_pitch_$i') ?? 1.0;
         }
       });
     } catch (e) {
-      _showStatus('No se pudieron cargar los ajustes: $e');
+      _showStatus('Error al cargar ajustes: $e');
     }
   }
 
@@ -191,25 +173,8 @@ class _SamplerHomeState extends State<SamplerHome> {
           return;
         }
 
-        final note = message.note;
-
-        if (midiLearn && learningPad != null) {
-          final index = learningPad!;
-
-          setState(() {
-            pads[index] = pads[index];
-            midiLearn = false;
-            learningPad = null;
-            status = 'Nota MIDI $note recibida';
-          });
-
-          _showStatus(
-            'Nota recibida: $note. Los pads usan notas MIDI 36 a 51.',
-          );
-          return;
-        }
-
-        final index = pads.indexWhere((pad) => pad.midiNote == note);
+        final index =
+            pads.indexWhere((pad) => pad.midiNote == message.note);
 
         if (index != -1) {
           _playPad(index);
@@ -219,7 +184,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       if (mounted) {
         setState(() {
           status = midiDevices.isEmpty
-              ? 'No se detectó controlador MIDI'
+              ? 'Listo · Conecta tu controlador MIDI'
               : '${midiDevices.length} dispositivo(s) MIDI detectado(s)';
         });
       }
@@ -242,9 +207,9 @@ class _SamplerHomeState extends State<SamplerHome> {
     }
 
     final source = File(sourcePath);
-    final extension = source.uri.pathSegments.last;
+    final fileName = source.uri.pathSegments.last;
     final destination = File(
-      '${library.path}/${DateTime.now().microsecondsSinceEpoch}_$extension',
+      '${library.path}/${DateTime.now().microsecondsSinceEpoch}_$fileName',
     );
 
     await source.copy(destination.path);
@@ -253,16 +218,21 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Future<void> _loadAudio(int index) async {
     try {
-      final files = await FilePicker.pickFiles(type: FileType.audio);
+      final files = await FilePicker.pickFiles(
+        type: FileType.audio,
+      );
 
-      if (files.isEmpty || files.first.path == null) return;
+      if (files.isEmpty || files.first.path == null) {
+        _showStatus('No seleccionaste ningún audio');
+        return;
+      }
 
-      final file = files.first;
-      final copiedPath = await _copyAudioToLibrary(file.path!);
+      final selectedFile = files.first;
+      final copiedPath = await _copyAudioToLibrary(selectedFile.path!);
 
       setState(() {
         pads[index].audioPath = copiedPath;
-        pads[index].audioName = file.name;
+        pads[index].audioName = selectedFile.name;
       });
 
       await _saveSettings();
@@ -276,7 +246,7 @@ class _SamplerHomeState extends State<SamplerHome> {
     final pad = pads[index];
 
     if (pad.audioPath == null) {
-      _showStatus('Carga un audio en ${pad.name} primero');
+      _showStatus('Pulsa CARGAR AUDIO en ${pad.name}');
       return;
     }
 
@@ -301,18 +271,22 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       _showStatus('Reproduciendo ${pad.name}');
     } catch (e) {
-      _showStatus('Error al reproducir audio: $e');
+      _showStatus('Error al reproducir: $e');
     }
   }
 
   Future<void> _stopAll() async {
     for (final pad in pads) {
       await pad.player?.stop();
-      pad.active = false;
     }
 
     if (mounted) {
-      setState(() => status = 'Reproducción detenida');
+      setState(() {
+        for (final pad in pads) {
+          pad.active = false;
+        }
+        status = 'Todos los audios detenidos';
+      });
     }
   }
 
@@ -320,24 +294,22 @@ class _SamplerHomeState extends State<SamplerHome> {
     if (event is! RawKeyDownEvent || event.repeat) return;
 
     final key = event.logicalKey.keyLabel.toUpperCase();
-
     final index = pads.indexWhere((pad) => pad.keyLabel == key);
 
-    if (index != -1) {
-      _playPad(index);
-    }
+    if (index != -1) _playPad(index);
   }
 
-  void _clearPad(int index) async {
+  Future<void> _clearPad(int index) async {
     await pads[index].player?.stop();
 
     setState(() {
       pads[index].audioPath = null;
       pads[index].audioName = null;
+      pads[index].active = false;
     });
 
     await _saveSettings();
-    _showStatus('Pad ${index + 1} limpiado');
+    _showStatus('Audio eliminado del pad ${index + 1}');
   }
 
   @override
@@ -350,14 +322,20 @@ class _SamplerHomeState extends State<SamplerHome> {
         appBar: AppBar(
           title: const Text(
             'SAMPLER PERREO',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
           ),
           backgroundColor: const Color(0xFF191923),
           actions: [
             IconButton(
               tooltip: 'Detener todos los audios',
               onPressed: _stopAll,
-              icon: const Icon(Icons.stop_circle, color: Colors.redAccent),
+              icon: const Icon(
+                Icons.stop_circle,
+                color: Colors.redAccent,
+              ),
             ),
             IconButton(
               tooltip: 'Guardar ajustes',
@@ -382,62 +360,48 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Widget _buildMasterControls() {
     return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF191923),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white12),
       ),
-      child: Column(
+      child: Row(
         children: [
-          const Text(
-            'DJ DANNYS YOEL',
-            style: TextStyle(
-              color: Colors.cyanAccent,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
+          const Expanded(
+            child: Text(
+              'DJ DANNYS YOEL',
+              style: TextStyle(
+                color: Colors.cyanAccent,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.volume_up),
-              const SizedBox(width: 8),
-              const Text('VOLUMEN'),
-              Expanded(
-                child: Slider(
-                  value: masterVolume,
-                  min: 0,
-                  max: 1,
-                  onChanged: (value) {
-                    setState(() => masterVolume = value);
-                  },
-                  onChangeEnd: (_) => _saveSettings(),
-                ),
-              ),
-              Text('${(masterVolume * 100).round()}%'),
-            ],
+          RotaryKnob(
+            label: 'VOLUMEN',
+            value: masterVolume,
+            min: 0,
+            max: 1,
+            display: '${(masterVolume * 100).round()}%',
+            onChanged: (value) {
+              setState(() => masterVolume = value);
+              _saveSettings();
+            },
           ),
-          Row(
-            children: [
-              const Icon(Icons.graphic_eq),
-              const SizedBox(width: 8),
-              const Text('PITCH'),
-              Expanded(
-                child: Slider(
-                  value: masterPitch,
-                  min: 0.5,
-                  max: 2.0,
-                  onChanged: (value) {
-                    setState(() => masterPitch = value);
-                  },
-                  onChangeEnd: (_) => _saveSettings(),
-                ),
-              ),
-              Text('${masterPitch.toStringAsFixed(2)}x'),
-            ],
+          const SizedBox(width: 14),
+          RotaryKnob(
+            label: 'PITCH',
+            value: masterPitch,
+            min: 0.5,
+            max: 2,
+            display: '${masterPitch.toStringAsFixed(2)}x',
+            onChanged: (value) {
+              setState(() => masterPitch = value);
+              _saveSettings();
+            },
           ),
         ],
       ),
@@ -446,32 +410,42 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Widget _buildBankSelector() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Row(
         children: [
           const Text(
             'BANCO',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           for (int i = 0; i < 8; i++)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    backgroundColor: selectedBank == i
-                        ? Colors.deepPurpleAccent
-                        : const Color(0xFF292936),
+                child: SizedBox(
+                  height: 30,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: selectedBank == i
+                          ? Colors.deepPurpleAccent
+                          : const Color(0xFF292936),
+                    ),
+                    onPressed: () {
+                      setState(() => selectedBank = i);
+                      _showStatus(
+                        'Banco ${i + 1} seleccionado. '
+                        'Los 16 pads actuales se mantienen.',
+                      );
+                    },
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() => selectedBank = i);
-                    _showStatus(
-                      'Banco ${i + 1}: esta versión usa 16 pads de audio',
-                    );
-                  },
-                  child: Text('${i + 1}'),
                 ),
               ),
             ),
@@ -482,94 +456,115 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Widget _buildPads() {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       child: GridView.builder(
         itemCount: pads.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          crossAxisSpacing: 7,
+          mainAxisSpacing: 7,
           childAspectRatio: 1.15,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
           final hasAudio = pad.audioPath != null;
 
-          return GestureDetector(
-            onTap: () => _playPad(index),
-            onLongPress: () => _loadAudio(index),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 100),
-              decoration: BoxDecoration(
-                color: pad.active
-                    ? pad.color
-                    : pad.color.withOpacity(hasAudio ? 0.30 : 0.10),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: pad.color,
-                  width: pad.active ? 3 : 1.5,
-                ),
-                boxShadow: pad.active
-                    ? [
-                        BoxShadow(
-                          color: pad.color.withOpacity(0.6),
-                          blurRadius: 18,
-                        ),
-                      ]
-                    : [],
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            decoration: BoxDecoration(
+              color: pad.active
+                  ? pad.color.withOpacity(0.85)
+                  : pad.color.withOpacity(hasAudio ? 0.20 : 0.08),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: pad.color,
+                width: pad.active ? 2.5 : 1,
               ),
-              child: Stack(
+              boxShadow: pad.active
+                  ? [
+                      BoxShadow(
+                        color: pad.color.withOpacity(0.5),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(5),
+              child: Column(
                 children: [
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            hasAudio ? Icons.music_note : Icons.add,
-                            size: 28,
-                            color: Colors.white,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          pad.name,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: pad.color,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            pad.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        ),
+                      ),
+                      if (hasAudio)
+                        InkWell(
+                          onTap: () => _clearPad(index),
+                          child: const Icon(
+                            Icons.close,
+                            size: 15,
+                            color: Colors.white70,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            hasAudio
-                                ? (pad.audioName ?? 'Audio cargado')
-                                : 'Mantén para cargar',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 10),
-                          ),
-                          Text(
-                            'Tecla ${pad.keyLabel} · MIDI ${pad.midiNote}',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ],
+                        ),
+                    ],
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _playPad(index),
+                      child: Center(
+                        child: Icon(
+                          hasAudio ? Icons.music_note : Icons.library_music,
+                          size: 25,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                  if (hasAudio)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: IconButton(
-                        tooltip: 'Quitar audio',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 16,
-                        onPressed: () => _clearPad(index),
-                        icon: const Icon(Icons.close),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 28,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _loadAudio(index),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: hasAudio
+                            ? const Color(0xFF292936)
+                            : Colors.deepPurpleAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: Icon(
+                        hasAudio ? Icons.refresh : Icons.add,
+                        size: 13,
+                      ),
+                      label: Text(
+                        hasAudio ? 'CAMBIAR AUDIO' : 'CARGAR AUDIO',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    hasAudio
+                        ? (pad.audioName ?? 'Audio cargado')
+                        : 'Tecla ${pad.keyLabel} · MIDI ${pad.midiNote}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white70,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -582,13 +577,143 @@ class _SamplerHomeState extends State<SamplerHome> {
   Widget _buildStatusBar() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       color: const Color(0xFF191923),
       child: Text(
         status,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.cyanAccent),
+        style: const TextStyle(
+          color: Colors.cyanAccent,
+          fontSize: 11,
+        ),
       ),
     );
+  }
+}
+
+class RotaryKnob extends StatelessWidget {
+  const RotaryKnob({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.display,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final String display;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onPanUpdate: (details) {
+        final next = (value - details.delta.dy * (max - min) / 150)
+            .clamp(min, max)
+            .toDouble();
+        onChanged(next);
+      },
+      onDoubleTap: () => onChanged(
+        label == 'PITCH' ? 1.0 : 0.8,
+      ),
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 3),
+            CustomPaint(
+              size: const Size(42, 42),
+              painter: KnobPainter(
+                progress: ((value - min) / (max - min)).clamp(0.0, 1.0),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              display,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.cyanAccent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class KnobPainter extends CustomPainter {
+  KnobPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.38;
+
+    final basePaint = Paint()
+      ..color = const Color(0xFF343440)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, radius, basePaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.white24
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    canvas.drawCircle(center, radius, borderPaint);
+
+    final startAngle = math.pi * 0.75;
+    const sweepAngle = math.pi * 1.5;
+
+    final arcPaint = Paint()
+      ..color = Colors.cyanAccent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius + 4),
+      startAngle,
+      sweepAngle * progress,
+      false,
+      arcPaint,
+    );
+
+    final angle = startAngle + sweepAngle * progress;
+    final pointerPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    final end = Offset(
+      center.dx + math.cos(angle) * radius * 0.72,
+      center.dy + math.sin(angle) * radius * 0.72,
+    );
+
+    canvas.drawLine(center, end, pointerPaint);
+    canvas.drawCircle(center, 3, Paint()..color = Colors.cyanAccent);
+  }
+
+  @override
+  bool shouldRepaint(covariant KnobPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
