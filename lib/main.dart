@@ -129,8 +129,21 @@ class _SamplerStudioState extends State<SamplerStudio>
 
       await _midiCommand.connectToDevice(devices.first);
 
-      _midiSubscription =
-          _midiCommand.onMidiDataReceived?.listen((event) {
+      
+_midiSubscription =
+    _midiCommand.onMidiDataReceived?.listen((event) {
+  final message = event.message;
+
+  if (message is NoteOnMessage && message.velocity > 0) {
+    final int index =
+        pads.indexWhere((pad) => pad['midi'] == message.note);
+
+    if (index != -1 && mounted) {
+      _playPad(index);
+    }
+  }
+});
+
         if (event is NoteOnMessage && event.velocity > 0) {
           final int index =
               pads.indexWhere((pad) => pad['midi'] == event.note);
