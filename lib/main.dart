@@ -68,9 +68,11 @@ class _SamplerHomeState extends State<SamplerHome> {
   final MidiCommand midi = MidiCommand();
   final FocusNode keyboardFocus = FocusNode();
 
-  final List<SamplePad> pads = List.generate(
-    16,
-    (i) => SamplePad(
+  final List<List<SamplePad>> banks = List.generate(
+    4,
+    (bank) => List.generate(
+      16,
+      (i) => SamplePad(
       name: 'PAD ${i + 1}',
       keyLabel: const [
         '1', '2', '3', '4',
@@ -80,8 +82,11 @@ class _SamplerHomeState extends State<SamplerHome> {
       ][i],
       color: Colors.primaries[i % Colors.primaries.length],
       midiNote: 36 + i,
+      ),
     ),
   );
+
+  List<SamplePad> get pads => banks[selectedBank];
 
   StreamSubscription<MidiDataReceivedEvent>? midiSubscription;
 
@@ -103,8 +108,10 @@ class _SamplerHomeState extends State<SamplerHome> {
     midiSubscription?.cancel();
     keyboardFocus.dispose();
 
-    for (final pad in pads) {
-      pad.player?.dispose();
+    for (final bank in banks) {
+      for (final pad in bank) {
+        pad.player?.dispose();
+      }
     }
 
     super.dispose();
@@ -120,11 +127,16 @@ class _SamplerHomeState extends State<SamplerHome> {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
 
-        for (int i = 0; i < pads.length; i++) {
-          pads[i].audioPath = prefs.getString('pad_$i');
-          pads[i].audioName = prefs.getString('pad_name_$i');
-          pads[i].volume = prefs.getDouble('pad_volume_$i') ?? 1.0;
-          pads[i].pitch = prefs.getDouble('pad_pitch_$i') ?? 1.0;
+        selectedBank = (prefs.getInt('selectedBank') ?? 0).clamp(0, 3);
+        for (int b = 0; b < banks.length; b++) {
+          for (int i = 0; i < banks[b].length; i++) {
+            final pad = banks[b][i];
+            final key = 'bank_${b}_pad_$i';
+            pad.audioPath = prefs.getString(key);
+            pad.audioName = prefs.getString('${key}_name');
+            pad.volume = prefs.getDouble('${key}_volume') ?? 1.0;
+            pad.pitch = prefs.getDouble('${key}_pitch') ?? 1.0;
+          }
         }
       });
     } catch (e) {
@@ -138,24 +150,25 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       await prefs.setDouble('masterVolume', masterVolume);
       await prefs.setDouble('masterPitch', masterPitch);
+      await prefs.setInt('selectedBank', selectedBank);
 
-      for (int i = 0; i < pads.length; i++) {
-        final pad = pads[i];
-
-        if (pad.audioPath != null) {
-          await prefs.setString('pad_$i', pad.audioPath!);
-        } else {
-          await prefs.remove('pad_$i');
+      for (int b = 0; b < banks.length; b++) {
+        for (int i = 0; i < banks[b].length; i++) {
+          final pad = banks[b][i];
+          final key = 'bank_${b}_pad_$i';
+          if (pad.audioPath != null) {
+            await prefs.setString(key, pad.audioPath!);
+          } else {
+            await prefs.remove(key);
+          }
+          if (pad.audioName != null) {
+            await prefs.setString('${key}_name', pad.audioName!);
+          } else {
+            await prefs.remove('${key}_name');
+          }
+          await prefs.setDouble('${key}_volume', pad.volume);
+          await prefs.setDouble('${key}_pitch', pad.pitch);
         }
-
-        if (pad.audioName != null) {
-          await prefs.setString('pad_name_$i', pad.audioName!);
-        } else {
-          await prefs.remove('pad_name_$i');
-        }
-
-        await prefs.setDouble('pad_volume_$i', pad.volume);
-        await prefs.setDouble('pad_pitch_$i', pad.pitch);
       }
     } catch (e) {
       _showStatus('Error al guardar: $e');
@@ -276,14 +289,18 @@ final selectedFile = files.first;
   }
 
   Future<void> _stopAll() async {
-    for (final pad in pads) {
-      await pad.player?.stop();
+    for (final bank in banks) {
+      for (final pad in bank) {
+        await pad.player?.stop();
+      }
     }
 
     if (mounted) {
       setState(() {
-        for (final pad in pads) {
-          pad.active = false;
+        for (final bank in banks) {
+          for (final pad in bank) {
+            pad.active = false;
+          }
         }
         status = 'Todos los audios detenidos';
       });
@@ -435,7 +452,7 @@ final selectedFile = files.first;
             ),
           ),
           const SizedBox(width: 8),
-          for (int i = 0; i < 8; i++)
+          for (int i = 0; i < 4; i++)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -450,10 +467,8 @@ final selectedFile = files.first;
                     ),
                     onPressed: () {
                       setState(() => selectedBank = i);
-                      _showStatus(
-                        'Banco ${i + 1} seleccionado. '
-                        'Los 16 pads actuales se mantienen.',
-                      );
+                      _saveSettings();
+                      _showStatus('Banco ${i + 1} seleccionado · 16 pads independientes');
                     },
                     child: Text(
                       '${i + 1}',
