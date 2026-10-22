@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
@@ -15,28 +18,27 @@ jobs:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Flutter
+      - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-          cache: true
+          channel: stable
 
-      - name: Verificar dependencias de Flutter
+      - name: Verificar Flutter
         run: flutter doctor -v
 
-      - name: Habilitar soporte para Windows
+      - name: Habilitar Windows
         run: flutter config --enable-windows-desktop
 
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar ejecutable para Windows
+      - name: Compilar Sampler Perreo
         run: flutter build windows --release
 
-      - name: Subir artefacto de compilación
+      - name: Guardar aplicación compilada
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Perreo-Windows
           path: build/windows/x64/runner/Release/
-
-  
+          if-no-files-found: error
+          
