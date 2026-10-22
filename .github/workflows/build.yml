@@ -1,25 +1,19 @@
 
-name: Compilar Sampler Perreo para Windows
+name: Compilar Sampler Perreo
 
 on:
   push:
     branches:
       - main
       - master
-    paths:
-      - '**'
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   build:
-    name: Compilar aplicacion Windows
     runs-on: windows-latest
 
     steps:
-      - name: Descargar repositorio
+      - name: Descargar el repositorio
         uses: actions/checkout@v4
 
       - name: Configurar Flutter
@@ -28,17 +22,14 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Activar soporte Windows
+      - name: Activar soporte para Windows
         run: flutter config --enable-windows-desktop
 
-      - name: Verificar Flutter
-        run: flutter --version
+      - name: Crear archivos de Windows
+        run: flutter create --platforms=windows .
 
       - name: Instalar dependencias
         run: flutter pub get
-
-      - name: Verificar codigo Dart
-        run: flutter analyze
 
       - name: Compilar Sampler Perreo
         run: flutter build windows --release
@@ -48,5 +39,3 @@ jobs:
         with:
           name: Sampler-Perreo-Windows
           path: build/windows/x64/runner/Release/
-          if-no-files-found: error
-          retention-days: 7
