@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -127,42 +128,30 @@ class _SamplerStudioState extends State<SamplerStudio>
         return;
       }
 
-      await _midiCommand.connectToDevice(devices.first);
+      _midiSubscription =
+          _midiCommand.onMidiDataReceived?.listen((event) {
+        final message = event.message;
 
-      
-_midiSubscription =
-    _midiCommand.onMidiDataReceived?.listen((event) {
-  final message = event.message;
-
-  if (message is NoteOnMessage && message.velocity > 0) {
-    final int index =
-        pads.indexWhere((pad) => pad['midi'] == message.note);
-
-    if (index != -1 && mounted) {
-      _playPad(index);
-    }
-  }
-});
-
-        if (event is NoteOnMessage && event.velocity > 0) {
+        if (message is NoteOnMessage && message.velocity > 0) {
           final int index =
-              pads.indexWhere((pad) => pad['midi'] == event.note);
+              pads.indexWhere((pad) => pad['midi'] == message.note);
 
           if (index != -1 && mounted) {
             _playPad(index);
           }
         }
       });
+
+      await _midiCommand.connectToDevice(devices.first);
     } catch (e) {
       debugPrint('No se pudo conectar el dispositivo MIDI: $e');
     }
   }
 
-  void _handleKeyEvent(RawKeyEvent event) {
-    if (event is! RawKeyDownEvent || event.repeat) return;
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
 
     final String key = event.logicalKey.keyLabel.toUpperCase();
-
     final int index = pads.indexWhere((pad) => pad['key'] == key);
 
     if (index != -1) {
@@ -190,9 +179,11 @@ _midiSubscription =
     if (path == null) return;
 
     try {
-      await player.setVolume(masterVolume);
-      await player.setPlaybackRate(masterPitch);
       await player.stop();
+      await player.setVolume(masterVolume);
+      await player.setPlaybackRate(
+        masterPitch.clamp(0.5, 2.0).toDouble(),
+      );
       await player.play(DeviceFileSource(path));
     } catch (e) {
       debugPrint('Error al reproducir el sonido: $e');
@@ -223,10 +214,10 @@ _midiSubscription =
 
   @override
   Widget build(BuildContext context) {
-    return RawKeyboardListener(
+    return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
-      onKey: _handleKeyEvent,
+      onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         appBar: _buildTopBar(),
         body: SafeArea(
@@ -404,7 +395,9 @@ _midiSubscription =
                   height: 12 + waveHeight * 75,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.35 + waveHeight * 0.45),
+                    color: color.withValues(
+                      alpha: 0.35 + waveHeight * 0.45,
+                    ),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -448,19 +441,21 @@ _midiSubscription =
                 duration: const Duration(milliseconds: 90),
                 decoration: BoxDecoration(
                   color: active
-                      ? color.withOpacity(0.55)
+                      ? color.withValues(alpha: 0.55)
                       : hasAudio
-                          ? color.withOpacity(0.16)
+                          ? color.withValues(alpha: 0.16)
                           : const Color(0xFF20242C),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: active ? color : color.withOpacity(0.55),
+                    color: active
+                        ? color
+                        : color.withValues(alpha: 0.55),
                     width: active ? 2 : 1,
                   ),
                   boxShadow: active
                       ? [
                           BoxShadow(
-                            color: color.withOpacity(0.22),
+                            color: color.withValues(alpha: 0.22),
                             blurRadius: 12,
                           ),
                         ]
@@ -479,7 +474,7 @@ _midiSubscription =
                             size: 20,
                             color: active
                                 ? Colors.white
-                                : color.withOpacity(0.9),
+                                : color.withValues(alpha: 0.9),
                           ),
                           const SizedBox(height: 7),
                           Text(
