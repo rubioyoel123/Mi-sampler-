@@ -996,7 +996,7 @@ final selectedFile = files.first;
       decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
       child: Row(children: [
         SizedBox(width: compact ? 58 : 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: compact ? 7 : 10, fontWeight: FontWeight.bold)),
+          Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: compact ? 7 : 10, fontWeight: FontWeight.bold)),
           SizedBox(height: compact ? 1 : 5),
           DropdownButton<String>(value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
             items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10)))],
