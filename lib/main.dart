@@ -679,45 +679,52 @@ final selectedFile = files.first;
               final landscape = constraints.maxWidth > constraints.maxHeight;
               final compact = landscape || constraints.maxHeight < 720 || constraints.maxWidth < 1000;
 
-              // En móvil horizontal priorizamos los pads y el piano:
-              // no hay que desplazarse y los elementos se redistribuyen solos.
+              // Diseño horizontal de cabina: pads a la izquierda y controles compactos a la derecha.
               if (landscape) {
                 return Column(
                   children: [
                     SizedBox(
-                      height: 27,
+                      height: 26,
                       child: Row(
                         children: [
                           Expanded(child: _buildBankSelector()),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
-                            padding: EdgeInsets.zero,
-                            tooltip: 'Ajustes',
-                            onPressed: _openSettings,
-                            icon: Icon(Icons.tune, color: uiAccent, size: 16),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
-                            padding: EdgeInsets.zero,
-                            tooltip: 'Detener todos',
-                            onPressed: _stopAll,
-                            icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 16),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
+                          IconButton(visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 26),
+                            padding: EdgeInsets.zero, tooltip: 'Ajustes', onPressed: _openSettings,
+                            icon: Icon(Icons.tune, color: uiAccent, size: 15)),
+                          IconButton(visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 26),
+                            padding: EdgeInsets.zero, tooltip: 'Detener todos', onPressed: _stopAll,
+                            icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 15)),
+                          IconButton(visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 26),
                             padding: EdgeInsets.zero,
                             tooltip: showPiano ? 'Ocultar piano' : 'Mostrar piano',
                             onPressed: () => setState(() => showPiano = !showPiano),
-                            icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 16),
-                          ),
+                            icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 15)),
                         ],
                       ),
                     ),
                     Expanded(
-                      child: _buildPads(compact: true),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 6, child: _buildPads(compact: true)),
+                          Expanded(
+                            flex: 5,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(1, 2, 3, 1),
+                              child: Column(
+                                children: [
+                                  SizedBox(height: 53, child: _buildMasterControls(compact: true)),
+                                  SizedBox(height: 91, child: _buildEffectsPanel(compact: true)),
+                                  Expanded(child: _buildMiniAudioEditor()),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     if (showPiano) _buildVirtualPiano(compact: true),
                     SizedBox(height: 15, child: _buildStatusBar()),
@@ -943,6 +950,72 @@ final selectedFile = files.first;
     );
   }
 
+  Widget _buildMiniAudioEditor() {
+    final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(3, 2, 2, 1),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101018),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.65)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            const Icon(Icons.content_cut, color: Colors.purpleAccent, size: 13),
+            const SizedBox(width: 3),
+            const Expanded(child: Text('MINI EDITOR / CORTE',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 8))),
+            DropdownButton<int>(
+              value: editorPadIndex, isDense: true, underline: const SizedBox.shrink(),
+              dropdownColor: const Color(0xFF20202B),
+              items: List.generate(16, (i) => DropdownMenuItem(
+                value: i, child: Text('P\u0024{i + 1}', style: const TextStyle(fontSize: 9)))),
+              onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); },
+            ),
+          ]),
+          Expanded(child: Container(
+            decoration: BoxDecoration(color: const Color(0xFF08080D),
+              borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+            child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
+              child: const SizedBox.expand()),
+          )),
+          Row(children: [
+            const Text('IN', style: TextStyle(fontSize: 8, color: Colors.purpleAccent)),
+            Expanded(child: Slider(value: editorIn, min: 0,
+              max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
+              activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v))),
+            Text('\u0024{(editorIn * 100).round()}%', style: const TextStyle(fontSize: 8)),
+          ]),
+          Row(children: [
+            const Text('OUT', style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
+            Expanded(child: Slider(value: editorOut,
+              min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(), max: 1,
+              activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v))),
+            Text('\u0024{(editorOut * 100).round()}%', style: const TextStyle(fontSize: 8)),
+          ]),
+          Row(children: [
+            Expanded(child: SizedBox(height: 23, child: OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              onPressed: pad.audioPath == null ? null : () => _playPad(editorPadIndex),
+              child: const Icon(Icons.play_arrow, size: 14)))),
+            const SizedBox(width: 4),
+            Expanded(child: SizedBox(height: 23, child: OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              onPressed: pad.audioPath == null ? null : () => _showStatus(
+                'Corte marcado en \u0024{pad.name}: IN \u0024{editorIn.toStringAsFixed(2)} · OUT \u0024{editorOut.toStringAsFixed(2)}. El recorte/exportación real aún no está implementado.'),
+              child: const Icon(Icons.content_cut, size: 13)))),
+          ]),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAudioEditorPanel() {
     final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
     return Container(
@@ -1039,7 +1112,7 @@ final selectedFile = files.first;
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: SizedBox(
-                  height: 30,
+                  height: 23,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -1074,7 +1147,7 @@ final selectedFile = files.first;
           crossAxisCount: 4,
           crossAxisSpacing: compact ? 1 : 4,
           mainAxisSpacing: compact ? 1 : 4,
-          childAspectRatio: compact ? 3.8 : (compactPads ? 1.75 : 1.2),
+          childAspectRatio: compact ? 1.72 : (compactPads ? 1.75 : 1.2),
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
