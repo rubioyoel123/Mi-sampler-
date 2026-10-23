@@ -676,7 +676,53 @@ final selectedFile = files.first;
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxHeight < 720 || constraints.maxWidth < 1000;
+              final landscape = constraints.maxWidth > constraints.maxHeight;
+              final compact = landscape || constraints.maxHeight < 720 || constraints.maxWidth < 1000;
+
+              // En móvil horizontal priorizamos los pads y el piano:
+              // no hay que desplazarse y los elementos se redistribuyen solos.
+              if (landscape) {
+                return Column(
+                  children: [
+                    SizedBox(
+                      height: 34,
+                      child: Row(
+                        children: [
+                          Expanded(child: _buildBankSelector()),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Ajustes',
+                            onPressed: _openSettings,
+                            icon: Icon(Icons.tune, color: uiAccent, size: 19),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Detener todos',
+                            onPressed: _stopAll,
+                            icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 19),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            tooltip: showPiano ? 'Ocultar piano' : 'Mostrar piano',
+                            onPressed: () => setState(() => showPiano = !showPiano),
+                            icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 19),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: showPiano ? 3 : 1,
+                      child: _buildPads(compact: true),
+                    ),
+                    if (showPiano) _buildVirtualPiano(compact: true),
+                    SizedBox(height: 18, child: _buildStatusBar()),
+                  ],
+                );
+              }
+
               return Column(
                 children: [
                   SizedBox(
