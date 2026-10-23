@@ -523,15 +523,15 @@ final selectedFile = files.first;
           style: TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
         Row(children: [
           knob('ECO DELAY', echoDelay, 0.05, 1.0, (v) { echoDelay = v; echoEnabled = true; },
-            '\${echoDelay.toStringAsFixed(2)} s', Colors.purpleAccent),
+            '${echoDelay.toStringAsFixed(2)} s', Colors.purpleAccent),
           knob('ECO DECAY', echoDecay, 0.0, 1.0, (v) { echoDecay = v; echoEnabled = true; },
-            '\${(echoDecay * 100).round()}%', Colors.purpleAccent),
+            '${(echoDecay * 100).round()}%', Colors.purpleAccent),
           knob('REVERB ROOM', reverbRoom, 0.0, 1.0, (v) { reverbRoom = v; reverbEnabled = true; },
-            '\${(reverbRoom * 100).round()}%', Colors.cyanAccent),
+            '${(reverbRoom * 100).round()}%', Colors.cyanAccent),
           knob('REVERB DAMP', reverbDamp, 0.0, 1.0, (v) { reverbDamp = v; reverbEnabled = true; },
-            '\${(reverbDamp * 100).round()}%', Colors.cyanAccent),
+            '${(reverbDamp * 100).round()}%', Colors.cyanAccent),
           knob('FLANGER', flangerAmount, 0.0, 1.0, (v) { flangerAmount = v; flangerEnabled = v > 0.01; },
-            '\${(flangerAmount * 100).round()}%', Colors.orangeAccent),
+            '${(flangerAmount * 100).round()}%', Colors.orangeAccent),
         ]),
         Row(children: [
           Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
@@ -558,11 +558,11 @@ final selectedFile = files.first;
         Row(children: [
           const Icon(Icons.graphic_eq, color: Colors.purpleAccent, size: 17),
           const SizedBox(width: 5),
-          Expanded(child: Text('EDITOR · \${pad.audioName ?? pad.name}', maxLines: 1,
+          Expanded(child: Text('EDITOR · ${pad.audioName ?? pad.name}', maxLines: 1,
             overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
           DropdownButton<int>(value: editorPadIndex, dropdownColor: const Color(0xFF20202B),
             items: List.generate(pads.length, (i) => DropdownMenuItem(value: i,
-              child: Text('PAD \${i + 1}', style: const TextStyle(fontSize: 10)))),
+              child: Text('PAD ${i + 1}', style: const TextStyle(fontSize: 10)))),
             onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); }),
         ]),
         const SizedBox(height: 5),
@@ -570,7 +570,7 @@ final selectedFile = files.first;
           border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(6)),
           child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
             child: const SizedBox.expand()))),
-        Text('IN \${(editorIn * 100).round()}%     OUT \${(editorOut * 100).round()}%',
+        Text('IN ${(editorIn * 100).round()}%     OUT ${(editorOut * 100).round()}%',
           style: const TextStyle(color: Colors.white70, fontSize: 10)),
         Row(children: [const Text('IN', style: TextStyle(color: Colors.purpleAccent, fontSize: 10)),
           Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0),
@@ -583,7 +583,7 @@ final selectedFile = files.first;
             icon: const Icon(Icons.play_arrow, size: 16), label: const Text('ESCUCHAR', style: TextStyle(fontSize: 10)))),
           const SizedBox(width: 5),
           Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _showStatus(
-            'Selección marcada: IN \${editorIn.toStringAsFixed(2)} · OUT \${editorOut.toStringAsFixed(2)}. El recorte destructivo aún no está implementado.'),
+            'Selección marcada: IN ${editorIn.toStringAsFixed(2)} · OUT ${editorOut.toStringAsFixed(2)}. El recorte destructivo aún no está implementado.'),
             icon: const Icon(Icons.content_cut, size: 16), label: const Text('MARCAR CORTE', style: TextStyle(fontSize: 10)))),
         ]),
         const Text('Vista de forma de onda ilustrativa; el recorte/exportación real de selección queda pendiente.',
@@ -608,7 +608,7 @@ final selectedFile = files.first;
               child: InkWell(onTap: () {
                 final idx = note % 16;
                 _playPad(idx);
-                _showStatus('Tecla virtual · MIDI \${36 + note}');
+                _showStatus('Tecla virtual · MIDI ${36 + note}');
               }, child: Align(alignment: Alignment.bottomCenter,
                 child: Padding(padding: const EdgeInsets.only(bottom: 3),
                   child: Text(labels[i % 7], style: const TextStyle(color: Colors.black, fontSize: 8))))))));
