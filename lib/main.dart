@@ -549,7 +549,7 @@ final selectedFile = files.first;
   }
 
   Widget _buildAudioEditorPanel() {
-    final pad = pads[editorPadIndex.clamp(0, pads.length - 1)];
+    final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
     return Container(
       margin: const EdgeInsets.fromLTRB(3, 6, 10, 8), padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: const Color(0xFF101018),
@@ -573,10 +573,10 @@ final selectedFile = files.first;
         Text('IN ${(editorIn * 100).round()}%     OUT ${(editorOut * 100).round()}%',
           style: const TextStyle(color: Colors.white70, fontSize: 10)),
         Row(children: [const Text('IN', style: TextStyle(color: Colors.purpleAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0),
+          Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
             activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v)))]),
         Row(children: [const Text('OUT', style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorOut, min: (editorIn + 0.02).clamp(0.0, 1.0), max: 1,
+          Expanded(child: Slider(value: editorOut, min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(), max: 1,
             activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v)))]),
         Row(children: [
           Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _playPad(editorPadIndex),
