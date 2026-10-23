@@ -13,6 +13,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 
+import 'padkit.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SamplerPerreoApp());
