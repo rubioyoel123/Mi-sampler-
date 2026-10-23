@@ -72,12 +72,12 @@ class _SamplerHomeState extends State<SamplerHome> {
   final Map<String, AudioSource> _audioCache = {};
   final Map<int, AudioSource> _pianoCache = {};
   final Map<String, AudioSource> _sk5Cache = {};
-  static const List<String> _sk5PadSamples = [
-    'kick.wav', 'snare.wav', 'hihat.wav', 'conga_low.wav',
-    'conga_high.wav', 'laser.wav', 'dog.wav', 'lion.wav',
-    'kick.wav', 'snare.wav', 'hihat.wav', 'conga_low.wav',
-    'conga_high.wav', 'laser.wav', 'dog.wav', 'lion.wav',
-  ];
+  static const List<String> _champetaPadSamples = ['conga-low.wav','conga-high.wav','timbale-low-twin.wav','timbale-high-twin.wav','cowbell.wav','shaker.wav','clave.wav','clave-low.wav','kick-beater.wav','kick-tight-beater.wav','snare.wav','clap.wav','808-c.wav','808-f.wav','808-g.wav','808-long.wav'];
+  static const List<String> _dembowPadSamples = ['kick-beater.wav','snare.wav','kick-tight-beater.wav','clap.wav','808-c.wav','808-f.wav','808-g.wav','808-long.wav','clave.wav','clave-low.wav','timbale-low-twin.wav','timbale-high-twin.wav','conga-low.wav','conga-high.wav','cowbell.wav','shaker.wav'];
+  static const List<String> _sk5PadSamples = ['kick.wav','snare.wav','hihat.wav','conga_low.wav','conga_high.wav','laser.wav','dog.wav','lion.wav','kick.wav','snare.wav','hihat.wav','conga_low.wav','conga_high.wav','laser.wav','dog.wav','lion.wav'];
+  static const List<String> _champetaPadLabels = ['CONGA LOW','CONGA HIGH','TIMBAL LOW','TIMBAL HIGH','COWBELL','SHAKER','CLAVE','CLAVE LOW','KICK','KICK TIGHT','SNARE','CLAP','808 C','808 F','808 G','808 LONG'];
+  static const List<String> _dembowPadLabels = ['KICK','SNARE','KICK TIGHT','CLAP','808 C','808 F','808 G','808 LONG','CLAVE','CLAVE LOW','TIMBAL LOW','TIMBAL HIGH','CONGA LOW','CONGA HIGH','COWBELL','SHAKER'];
+  static const List<String> _sk5PadLabels = ['KICK','SNARE','HI-HAT','BONGO LOW','BONGO HIGH','LASER','DOG','LION','KICK 2','SNARE 2','HI-HAT 2','BONGO LOW 2','BONGO HIGH 2','LASER 2','DOG 2','LION 2'];
   final Map<int, String> pianoAudioPaths = {};
   String pianoTone = 'Piano';
   bool _audioReady = false;
@@ -438,7 +438,7 @@ final selectedFile = files.first;
     final pad = pads[index];
 
     if (pad.audioPath == null) {
-      await _playBundledSk5(index);
+      await _playBundledSample(index);
       return;
     }
 
@@ -471,19 +471,50 @@ final selectedFile = files.first;
     }
   }
 
-  Future<void> _playBundledSk5(int index) async {
+  String _padLabel(int index) {
+    switch (selectedBank) {
+      case 0: return _champetaPadLabels[index % _champetaPadLabels.length];
+      case 1: return _dembowPadLabels[index % _dembowPadLabels.length];
+      case 2: return _sk5PadLabels[index % _sk5PadLabels.length];
+      default: return 'PAD ${index + 1}';
+    }
+  }
+
+  Future<void> _playBundledSample(int index) async {
     if (!_audioReady) {
       _showStatus('El motor de audio todavía está iniciando');
       return;
     }
-    final sample = _sk5PadSamples[index % _sk5PadSamples.length];
-    final assetPath = 'assets/sk5/$sample';
+    late final String bankName;
+    late final String folder;
+    late final String sample;
+    switch (selectedBank) {
+      case 0:
+        bankName = 'CHAMPETA';
+        folder = 'champeta';
+        sample = _champetaPadSamples[index % _champetaPadSamples.length];
+        break;
+      case 1:
+        bankName = 'DEMBOW';
+        folder = 'dembow';
+        sample = _dembowPadSamples[index % _dembowPadSamples.length];
+        break;
+      case 2:
+        bankName = 'CASIO SK-5';
+        folder = 'sk5';
+        sample = _sk5PadSamples[index % _sk5PadSamples.length];
+        break;
+      default:
+        _showStatus('Banco personal: carga un audio en el PAD ${index + 1}');
+        return;
+    }
+    final assetPath = 'assets/$folder/$sample';
     try {
       var source = _sk5Cache[assetPath];
       if (source == null) {
         final data = await rootBundle.load(assetPath);
         final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-        source = await audio.loadMem('sk5_$sample', bytes, mode: LoadMode.memory);
+        source = await audio.loadMem('${folder}_$sample', bytes, mode: LoadMode.memory);
         _sk5Cache[assetPath] = source;
       }
       final pad = pads[index];
@@ -491,12 +522,12 @@ final selectedFile = files.first;
       pad.handle = handle;
       audio.setRelativePlaySpeed(handle, (masterPitch * pad.pitch).clamp(0.5, 2.0));
       if (mounted) setState(() => pad.active = true);
-      _showStatus('Casio SK-5 · ${sample.replaceAll('.wav', '').toUpperCase()} · PAD ${index + 1}');
+      _showStatus('$bankName · ${sample.replaceAll('.wav', '').replaceAll('-', ' ').toUpperCase()} · PAD ${index + 1}');
       Future.delayed(const Duration(milliseconds: 250), () {
         if (mounted) setState(() => pad.active = false);
       });
     } catch (e) {
-      _showStatus('No se pudo cargar el sample SK-5 ($sample): $e');
+      _showStatus('No se pudo cargar $bankName ($sample): $e');
     }
   }
 
@@ -1145,18 +1176,14 @@ final selectedFile = files.first;
   }
 
   Widget _buildBankSelector() {
+    const bankLabels = ['CHAMP', 'DEMB', 'SK-5', 'USER'];
+    const fullNames = ['Champeta', 'Dembow', 'Casio SK-5', 'Personal'];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
       child: Row(
         children: [
-          const Text(
-            'BANCO',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 8),
+          const Text('BANCO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 5),
           for (int i = 0; i < 4; i++)
             Expanded(
               child: Padding(
@@ -1166,19 +1193,14 @@ final selectedFile = files.first;
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
-                      backgroundColor: selectedBank == i
-                          ? Colors.deepPurpleAccent
-                          : const Color(0xFF292936),
+                      backgroundColor: selectedBank == i ? Colors.deepPurpleAccent : const Color(0xFF292936),
                     ),
                     onPressed: () {
                       setState(() => selectedBank = i);
                       _saveSettings();
-                      _showStatus('Banco ${i + 1} seleccionado · 16 pads independientes');
+                      _showStatus('${fullNames[i]} seleccionado · 16 pads independientes');
                     },
-                    child: Text(
-                      '${i + 1}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
+                    child: Text(bankLabels[i], style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -1232,7 +1254,7 @@ final selectedFile = files.first;
                     children: [
                       Expanded(
                         child: Text(
-                          pad.name,
+                          _padLabel(index),
                           style: TextStyle(
                             fontSize: compact ? 7 : 11,
                             fontWeight: FontWeight.bold,
