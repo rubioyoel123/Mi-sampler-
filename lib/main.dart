@@ -73,6 +73,15 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool echoEnabled = false;
   bool reverbEnabled = false;
   bool flangerEnabled = false;
+  bool showPiano = true;
+  int editorPadIndex = 0;
+  double echoDelay = 0.28;
+  double echoDecay = 0.35;
+  double reverbRoom = 0.65;
+  double reverbDamp = 0.35;
+  double flangerAmount = 0.5;
+  double editorIn = 0.0;
+  double editorOut = 1.0;
 
   final List<List<SamplePad>> banks = List.generate(
     4,
@@ -207,25 +216,13 @@ class _SamplerHomeState extends State<SamplerHome> {
   void _applyEffects() {
     if (!_audioReady) return;
     final filters = audio.filters;
-    if (echoEnabled) {
-      filters.echoFilter.activate();
-      filters.echoFilter.delay.value = 0.28;
-      filters.echoFilter.decay.value = 0.35;
-    } else {
-      filters.echoFilter.deactivate();
-    }
-    if (reverbEnabled) {
-      filters.freeverbFilter.activate();
-      filters.freeverbFilter.roomSize.value = 0.65;
-      filters.freeverbFilter.damp.value = 0.35;
-    } else {
-      filters.freeverbFilter.deactivate();
-    }
-    if (flangerEnabled) {
-      filters.flangerFilter.activate();
-    } else {
-      filters.flangerFilter.deactivate();
-    }
+    filters.echoFilter.delay.value = echoDelay;
+    filters.echoFilter.decay.value = echoDecay;
+    if (echoEnabled) { filters.echoFilter.activate(); } else { filters.echoFilter.deactivate(); }
+    filters.freeverbFilter.roomSize.value = reverbRoom;
+    filters.freeverbFilter.damp.value = reverbDamp;
+    if (reverbEnabled) { filters.freeverbFilter.activate(); } else { filters.freeverbFilter.deactivate(); }
+    if (flangerEnabled && flangerAmount > 0.01) { filters.flangerFilter.activate(); } else { filters.flangerFilter.deactivate(); }
   }
 
   Future<void> _initMidi() async {
@@ -433,15 +430,25 @@ final selectedFile = files.first;
           ],
         ),
         body: SafeArea(
-          child: Column(
-            children: [
-              _buildMasterControls(),
-              _buildBankSelector(),
-              _buildEffectsPanel(),
-              Expanded(child: _buildPads()),
-              _buildStatusBar(),
-            ],
-          ),
+          child: Column(children: [
+            Row(children: [
+              Expanded(flex: 3, child: _buildMasterControls()),
+              Expanded(flex: 4, child: _buildBankSelector()),
+            ]),
+            Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(flex: 5, child: _buildPads()),
+              Expanded(flex: 4, child: _buildAudioEditorPanel()),
+            ])),
+            _buildEffectsPanel(),
+            if (showPiano) _buildVirtualPiano(),
+            Align(alignment: Alignment.centerRight, child: TextButton.icon(
+              onPressed: () => setState(() => showPiano = !showPiano),
+              icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: Colors.cyanAccent),
+              label: Text(showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
+                  style: const TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+            )),
+            _buildStatusBar(),
+          ]),
         ),
       ),
     );
@@ -498,50 +505,115 @@ final selectedFile = files.first;
   }
 
   Widget _buildEffectsPanel() {
-    Widget effect(String label, bool enabled, ValueChanged<bool> change) {
-      return Expanded(
-        child: FilterChip(
-          label: Text(label, style: const TextStyle(fontSize: 10)),
-          selected: enabled,
-          onSelected: (value) {
-            setState(() => change(value));
-            _applyEffects();
-            _saveSettings();
-          },
-          selectedColor: Colors.deepPurpleAccent,
-          checkmarkColor: Colors.white,
-          backgroundColor: const Color(0xFF292936),
-          side: BorderSide(color: enabled ? Colors.cyanAccent : Colors.white12),
-          padding: EdgeInsets.zero,
-        ),
-      );
-    }
+    Widget knob(String label, double value, double min, double max,
+        ValueChanged<double> change, String display, Color color) => Expanded(
+      child: RotaryKnob(label: label, value: value, min: min, max: max,
+        display: display, accent: color, onChanged: (v) {
+          setState(() => change(v));
+          _applyEffects();
+        }),
+    );
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF191923),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 3),
-            child: Text('EFECTOS DE AUDIO EN TIEMPO REAL',
-              style: TextStyle(fontSize: 10, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-          ),
-          Row(children: [
-            effect('ECO', echoEnabled, (v) => echoEnabled = v),
-            const SizedBox(width: 4),
-            effect('REVERB', reverbEnabled, (v) => reverbEnabled = v),
-            const SizedBox(width: 4),
-            effect('FLANGER', flangerEnabled, (v) => flangerEnabled = v),
-            const SizedBox(width: 4),
-          ]),
-        ],
-      ),
+      margin: const EdgeInsets.fromLTRB(10, 3, 10, 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(color: const Color(0xFF14141C),
+        borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('EFECTOS MAESTROS · PERILLAS FUNCIONALES',
+          style: TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+        Row(children: [
+          knob('ECO DELAY', echoDelay, 0.05, 1.0, (v) { echoDelay = v; echoEnabled = true; },
+            '\${echoDelay.toStringAsFixed(2)} s', Colors.purpleAccent),
+          knob('ECO DECAY', echoDecay, 0.0, 1.0, (v) { echoDecay = v; echoEnabled = true; },
+            '\${(echoDecay * 100).round()}%', Colors.purpleAccent),
+          knob('REVERB ROOM', reverbRoom, 0.0, 1.0, (v) { reverbRoom = v; reverbEnabled = true; },
+            '\${(reverbRoom * 100).round()}%', Colors.cyanAccent),
+          knob('REVERB DAMP', reverbDamp, 0.0, 1.0, (v) { reverbDamp = v; reverbEnabled = true; },
+            '\${(reverbDamp * 100).round()}%', Colors.cyanAccent),
+          knob('FLANGER', flangerAmount, 0.0, 1.0, (v) { flangerAmount = v; flangerEnabled = v > 0.01; },
+            '\${(flangerAmount * 100).round()}%', Colors.orangeAccent),
+        ]),
+        Row(children: [
+          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
+            title: const Text('ECO', style: TextStyle(fontSize: 10)), value: echoEnabled,
+            onChanged: (v) { setState(() => echoEnabled = v); _applyEffects(); _saveSettings(); })),
+          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
+            title: const Text('REVERB', style: TextStyle(fontSize: 10)), value: reverbEnabled,
+            onChanged: (v) { setState(() => reverbEnabled = v); _applyEffects(); _saveSettings(); })),
+          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
+            title: const Text('FLANGER', style: TextStyle(fontSize: 10)), value: flangerEnabled,
+            onChanged: (v) { setState(() => flangerEnabled = v); _applyEffects(); _saveSettings(); })),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildAudioEditorPanel() {
+    final pad = pads[editorPadIndex.clamp(0, pads.length - 1)];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(3, 6, 10, 8), padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: const Color(0xFF101018),
+        borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.65))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.graphic_eq, color: Colors.purpleAccent, size: 17),
+          const SizedBox(width: 5),
+          Expanded(child: Text('EDITOR · \${pad.audioName ?? pad.name}', maxLines: 1,
+            overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+          DropdownButton<int>(value: editorPadIndex, dropdownColor: const Color(0xFF20202B),
+            items: List.generate(pads.length, (i) => DropdownMenuItem(value: i,
+              child: Text('PAD \${i + 1}', style: const TextStyle(fontSize: 10)))),
+            onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); }),
+        ]),
+        const SizedBox(height: 5),
+        Expanded(child: Container(decoration: BoxDecoration(color: const Color(0xFF08080D),
+          border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(6)),
+          child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
+            child: const SizedBox.expand()))),
+        Text('IN \${(editorIn * 100).round()}%     OUT \${(editorOut * 100).round()}%',
+          style: const TextStyle(color: Colors.white70, fontSize: 10)),
+        Row(children: [const Text('IN', style: TextStyle(color: Colors.purpleAccent, fontSize: 10)),
+          Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0),
+            activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v)))]),
+        Row(children: [const Text('OUT', style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
+          Expanded(child: Slider(value: editorOut, min: (editorIn + 0.02).clamp(0.0, 1.0), max: 1,
+            activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v)))]),
+        Row(children: [
+          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _playPad(editorPadIndex),
+            icon: const Icon(Icons.play_arrow, size: 16), label: const Text('ESCUCHAR', style: TextStyle(fontSize: 10)))),
+          const SizedBox(width: 5),
+          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _showStatus(
+            'Selección marcada: IN \${editorIn.toStringAsFixed(2)} · OUT \${editorOut.toStringAsFixed(2)}. El recorte destructivo aún no está implementado.'),
+            icon: const Icon(Icons.content_cut, size: 16), label: const Text('MARCAR CORTE', style: TextStyle(fontSize: 10)))),
+        ]),
+        const Text('Vista de forma de onda ilustrativa; el recorte/exportación real de selección queda pendiente.',
+          style: TextStyle(color: Colors.white54, fontSize: 9)),
+      ]),
+    );
+  }
+
+  Widget _buildVirtualPiano() {
+    const labels = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    return Container(height: 82, margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFF12121A),
+        borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
+      child: Row(children: [
+        Container(width: 75, alignment: Alignment.center, child: const Text('PIANO\\nVIRTUAL',
+          textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold))),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(25, (i) {
+          const semitones = [0, 2, 4, 5, 7, 9, 11];
+          final note = semitones[i % 7] + (i ~/ 7) * 12;
+          return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1),
+            child: Material(color: Colors.white, borderRadius: BorderRadius.circular(3),
+              child: InkWell(onTap: () {
+                final idx = note % 16;
+                _playPad(idx);
+                _showStatus('Tecla virtual · MIDI \${36 + note}');
+              }, child: Align(alignment: Alignment.bottomCenter,
+                child: Padding(padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(labels[i % 7], style: const TextStyle(color: Colors.black, fontSize: 8))))))));
+        }))),
+      ]),
     );
   }
 
@@ -737,6 +809,7 @@ class RotaryKnob extends StatelessWidget {
     required this.max,
     required this.display,
     required this.onChanged,
+    this.accent = Colors.cyanAccent,
   });
 
   final String label;
@@ -745,6 +818,7 @@ class RotaryKnob extends StatelessWidget {
   final double max;
   final String display;
   final ValueChanged<double> onChanged;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -775,6 +849,7 @@ class RotaryKnob extends StatelessWidget {
               size: const Size(42, 42),
               painter: KnobPainter(
                 progress: ((value - min) / (max - min)).clamp(0.0, 1.0),
+                accent: accent,
               ),
             ),
             const SizedBox(height: 2),
@@ -793,9 +868,10 @@ class RotaryKnob extends StatelessWidget {
 }
 
 class KnobPainter extends CustomPainter {
-  KnobPainter({required this.progress});
+  KnobPainter({required this.progress, this.accent = Colors.cyanAccent});
 
   final double progress;
+  final Color accent;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -819,7 +895,7 @@ class KnobPainter extends CustomPainter {
     const sweepAngle = math.pi * 1.5;
 
     final arcPaint = Paint()
-      ..color = Colors.cyanAccent
+      ..color = accent
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
@@ -844,11 +920,41 @@ class KnobPainter extends CustomPainter {
     );
 
     canvas.drawLine(center, end, pointerPaint);
-    canvas.drawCircle(center, 3, Paint()..color = Colors.cyanAccent);
+    canvas.drawCircle(center, 3, Paint()..color = accent);
   }
 
   @override
   bool shouldRepaint(covariant KnobPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress || oldDelegate.accent != accent;
   }
+}
+
+class _EditorWavePainter extends CustomPainter {
+  _EditorWavePainter({required this.inPoint, required this.outPoint});
+  final double inPoint;
+  final double outPoint;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final mid = size.height / 2;
+    final random = math.Random(17);
+    final wave = Paint()..color = const Color(0xFFB56BFF).withOpacity(0.8)..strokeWidth = 1.2;
+    final grid = Paint()..color = Colors.white.withOpacity(0.07)..strokeWidth = 1;
+    for (int i = 1; i < 8; i++) {
+      final x = size.width * i / 8;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    canvas.drawLine(Offset(0, mid), Offset(size.width, mid), grid);
+    for (int i = 0; i < size.width.toInt(); i += 3) {
+      final h = 3 + random.nextDouble() * size.height * 0.72;
+      canvas.drawLine(Offset(i.toDouble(), mid - h / 2), Offset(i.toDouble(), mid + h / 2), wave);
+    }
+    final xIn = size.width * inPoint;
+    final xOut = size.width * outPoint;
+    canvas.drawRect(Rect.fromLTRB(xIn, 0, xOut, size.height), Paint()..color = Colors.purpleAccent.withOpacity(0.08));
+    canvas.drawLine(Offset(xIn, 0), Offset(xIn, size.height), Paint()..color = Colors.purpleAccent..strokeWidth = 2);
+    canvas.drawLine(Offset(xOut, 0), Offset(xOut, size.height), Paint()..color = Colors.blueAccent..strokeWidth = 2);
+  }
+  @override
+  bool shouldRepaint(covariant _EditorWavePainter oldDelegate) =>
+      oldDelegate.inPoint != inPoint || oldDelegate.outPoint != outPoint;
 }
