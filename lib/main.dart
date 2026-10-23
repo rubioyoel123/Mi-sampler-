@@ -26,9 +26,9 @@ class SamplerPerreoApp extends StatelessWidget {
       title: 'Sampler Perreo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: uiBackground,
+        scaffoldBackgroundColor: const Color(0xFF101016),
         colorScheme: const ColorScheme.dark(
-          primary: uiAccent,
+          primary: Colors.deepPurpleAccent,
           secondary: Colors.cyanAccent,
         ),
       ),
