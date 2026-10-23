@@ -1143,11 +1143,12 @@ final selectedFile = files.first;
       padding: EdgeInsets.fromLTRB(compact ? 2 : 8, compact ? 1 : 3, compact ? 2 : 8, compact ? 1 : 4),
       child: GridView.builder(
         itemCount: pads.length,
+        physics: compact ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
           crossAxisSpacing: compact ? 1 : 4,
           mainAxisSpacing: compact ? 1 : 4,
-          childAspectRatio: compact ? 1.72 : (compactPads ? 1.75 : 1.2),
+          childAspectRatio: compact ? 2.15 : (compactPads ? 1.75 : 1.2),
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
