@@ -32,7 +32,7 @@ jobs:
           marker = 'android:name=".MainActivity"'
           if marker not in content:
               raise SystemExit("No se encontró MainActivity en AndroidManifest.xml")
-          content = content.replace(marker, marker + '\\n            android:screenOrientation="landscape"', 1)
+          content = content.replace(marker, marker + '\n            android:screenOrientation="landscape"', 1)
           manifest.write_text(content)
           PY
 
