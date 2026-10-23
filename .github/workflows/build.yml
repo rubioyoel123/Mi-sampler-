@@ -71,6 +71,34 @@ jobs:
             print(source, "->", out)
           PY
 
+      - name: Descargar kits Champeta y Dembow (royalty-free)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          from pathlib import Path
+          base = "https://crate.hiphop/packs/dembow-latino/samples/"
+          samples = [
+            "808-c.wav", "808-f.wav", "808-g.wav", "808-long.wav",
+            "kick-beater.wav", "kick-tight-beater.wav", "snare.wav", "clap.wav",
+            "clave.wav", "clave-low.wav", "timbale-low-twin.wav", "timbale-high-twin.wav",
+            "conga-low.wav", "conga-high.wav", "cowbell.wav", "shaker.wav",
+          ]
+          # Percusión y bajos libres de regalías; cada banco usa su propio orden.
+          for folder in ("champeta", "dembow"):
+            out = Path("assets") / folder
+            out.mkdir(parents=True, exist_ok=True)
+            for name in samples:
+              url = base + name
+              request = urllib.request.Request(url, headers={"User-Agent": "SamplerPerreo/1.0"})
+              with urllib.request.urlopen(request, timeout=45) as response:
+                data = response.read()
+              if len(data) < 100:
+                raise SystemExit("Sample vacío o inválido: " + url)
+              (out / name).write_bytes(data)
+              print(folder, name, len(data), "bytes")
+          PY
+
       - name: Instalar dependencias
         run: flutter pub get
 
