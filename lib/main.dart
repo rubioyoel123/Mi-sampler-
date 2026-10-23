@@ -26,9 +26,9 @@ class SamplerPerreoApp extends StatelessWidget {
       title: 'Sampler Perreo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF101016),
+        scaffoldBackgroundColor: uiBackground,
         colorScheme: const ColorScheme.dark(
-          primary: Colors.deepPurpleAccent,
+          primary: uiAccent,
           secondary: Colors.cyanAccent,
         ),
       ),
@@ -78,6 +78,105 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool reverbEnabled = false;
   bool flangerEnabled = false;
   bool showPiano = true;
+  Color uiAccent = Colors.cyanAccent;
+  Color uiBackground = const Color(0xFF101016);
+  String uiThemeName = 'Neón';
+  bool compactPads = true;
+  bool showEditor = true;
+
+  Future<void> _openSettings() async {
+    const themes = <String, Color>{
+      'Neón': Colors.cyanAccent,
+      'Morado': Colors.purpleAccent,
+      'Azul': Colors.lightBlueAccent,
+      'Verde': Colors.greenAccent,
+      'Rojo': Colors.redAccent,
+      'Naranja': Colors.orangeAccent,
+      'Rosa': Colors.pinkAccent,
+      'Dorado': Colors.amberAccent,
+    };
+    String draftTheme = uiThemeName;
+    bool draftCompact = compactPads;
+    bool draftEditor = showEditor;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refreshDialog) => AlertDialog(
+          backgroundColor: const Color(0xFF151C28),
+          title: const Row(children: [
+            Icon(Icons.tune, color: Colors.cyanAccent),
+            SizedBox(width: 8),
+            Text('AJUSTES DE SAMPLER'),
+          ]),
+          content: SizedBox(
+            width: 430,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('TEMA Y COLOR PRINCIPAL', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 9, runSpacing: 9, children: themes.entries.map((entry) =>
+                    Tooltip(message: entry.key, child: InkWell(
+                      onTap: () => refreshDialog(() => draftTheme = entry.key),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: entry.value, shape: BoxShape.circle,
+                          border: Border.all(color: draftTheme == entry.key ? Colors.white : Colors.white24, width: draftTheme == entry.key ? 3 : 1),
+                        ),
+                        child: draftTheme == entry.key ? const Icon(Icons.check, color: Colors.black, size: 19) : null,
+                      ),
+                    ))).toList()),
+                  const SizedBox(height: 8),
+                  Text('Tema seleccionado: $draftTheme', style: const TextStyle(color: Colors.white70)),
+                  const Divider(height: 26),
+                  const Text('DISTRIBUCIÓN', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero, dense: true,
+                    title: const Text('Pads compactos'),
+                    subtitle: const Text('Evita que los pads se vean demasiado grandes'),
+                    value: draftCompact,
+                    onChanged: (v) => refreshDialog(() => draftCompact = v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero, dense: true,
+                    title: const Text('Mostrar editor de audio'),
+                    value: draftEditor,
+                    onChanged: (v) => refreshDialog(() => draftEditor = v),
+                  ),
+                  const Text('También puedes mostrar u ocultar el piano desde el menú principal.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCELAR')),
+            FilledButton.icon(
+              onPressed: () async {
+                setState(() {
+                  uiThemeName = draftTheme;
+                  uiAccent = themes[draftTheme] ?? Colors.cyanAccent;
+                  compactPads = draftCompact;
+                  showEditor = draftEditor;
+                });
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('uiThemeName', draftTheme);
+                await prefs.setBool('compactPads', draftCompact);
+                await prefs.setBool('showEditor', draftEditor);
+                if (mounted) _showStatus('Apariencia actualizada: $draftTheme');
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              icon: const Icon(Icons.check), label: const Text('APLICAR'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   int editorPadIndex = 0;
   double echoDelay = 0.28;
   double echoDecay = 0.35;
@@ -146,6 +245,11 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       setState(() {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
+        uiThemeName = prefs.getString('uiThemeName') ?? 'Neón';
+        const savedThemes = {'Neón': Colors.cyanAccent, 'Morado': Colors.purpleAccent, 'Azul': Colors.lightBlueAccent, 'Verde': Colors.greenAccent, 'Rojo': Colors.redAccent, 'Naranja': Colors.orangeAccent, 'Rosa': Colors.pinkAccent, 'Dorado': Colors.amberAccent};
+        uiAccent = savedThemes[uiThemeName] ?? Colors.cyanAccent;
+        compactPads = prefs.getBool('compactPads') ?? true;
+        showEditor = prefs.getBool('showEditor') ?? true;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
         pianoTone = prefs.getString('pianoTone') ?? 'Piano';
         for (int note = 48; note <= 84; note++) {
@@ -539,6 +643,7 @@ final selectedFile = files.first;
               color: const Color(0xFF171D29),
               icon: const Icon(Icons.menu, color: Colors.cyanAccent),
               onSelected: (choice) {
+                if (choice == 'settings') _openSettings();
                 if (choice == 'save') _saveSettings();
                 if (choice == 'stop') _stopAll();
                 if (choice == 'piano') setState(() => showPiano = !showPiano);
@@ -546,6 +651,9 @@ final selectedFile = files.first;
                 if (choice == 'midi') _showMidiDevices();
               },
               itemBuilder: (context) => const [
+                PopupMenuItem(value: 'settings', child: ListTile(
+                  dense: true, leading: Icon(Icons.tune, color: Colors.cyanAccent),
+                  title: Text('Apariencia y opciones'))),
                 PopupMenuItem(value: 'save', child: ListTile(
                   dense: true, leading: Icon(Icons.save, color: Colors.cyanAccent),
                   title: Text('Guardar ajustes'))),
@@ -573,7 +681,7 @@ final selectedFile = files.first;
             ]),
             Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Expanded(flex: 5, child: _buildPads()),
-              Expanded(flex: 4, child: _buildAudioEditorPanel()),
+              if (showEditor) Expanded(flex: 4, child: _buildAudioEditorPanel()),
             ])),
             _buildEffectsPanel(),
             if (showPiano) _buildVirtualPiano(),
@@ -581,7 +689,7 @@ final selectedFile = files.first;
               onPressed: () => setState(() => showPiano = !showPiano),
               icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: Colors.cyanAccent),
               label: Text(showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
-                  style: const TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+                  style: const TextStyle(color: uiAccent, fontSize: 11)),
             )),
             _buildStatusBar(),
           ]),
@@ -845,7 +953,7 @@ final selectedFile = files.first;
           crossAxisCount: 4,
           crossAxisSpacing: 4,
           mainAxisSpacing: 4,
-          childAspectRatio: 1.65,
+          childAspectRatio: compactPads ? 1.65 : 1.15,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
