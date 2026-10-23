@@ -431,7 +431,16 @@ final selectedFile = files.first;
     final pad = pads[index];
 
     if (pad.audioPath == null) {
-      _showStatus('Pulsa CARGAR AUDIO en ${pad.name}');
+      if (pianoTone == 'SK-5 Retro') {
+        await _playPianoNote(pad.midiNote + 24);
+        if (mounted) setState(() => pad.active = true);
+        Future.delayed(const Duration(milliseconds: 180), () {
+          if (mounted) setState(() => pad.active = false);
+        });
+        _showStatus('Sonido SK-5 Retro · ${pad.name}');
+      } else {
+        _showStatus('Pulsa CARGAR AUDIO en ${pad.name}');
+      }
       return;
     }
 
@@ -465,7 +474,9 @@ final selectedFile = files.first;
   }
 
   // Genera sonidos WAV dentro de la propia aplicación: no requiere descargar muestras.
-  Uint8List _makeToneWav(int midiNote, {required bool electronic}) {
+  Uint8List _makeToneWav(int midiNote, {required String tone}) {
+    final electronic = tone == 'Electrónico';
+    final sk5Retro = tone == 'SK-5 Retro';
     const sampleRate = 22050;
     const seconds = 1.2;
     const bitsPerSample = 16;
@@ -495,16 +506,28 @@ final selectedFile = files.first;
       final t = i / sampleRate;
       final phase = 2 * math.pi * frequency * t;
       double wave;
-      if (electronic) {
+      if (sk5Retro) {
+        // Timbre sintetizado retro de 8 bits, inspirado en teclados de muestreo antiguos.
+        wave = (math.sin(phase) * 0.56) +
+            (math.sin(phase * 2.01) * 0.25) +
+            (math.sin(phase * 3.02) * 0.13) +
+            (math.sin(phase * 4.01) * 0.06);
+      } else if (electronic) {
         wave = (2 / math.pi) * math.asin(math.sin(phase));
       } else {
         wave = math.sin(phase) * 0.68 + math.sin(phase * 2) * 0.22 + math.sin(phase * 3) * 0.10;
       }
-      final attack = (t / 0.015).clamp(0.0, 1.0);
-      final envelope = electronic
-          ? attack * (0.82 + 0.18 * math.exp(-t * 1.4))
-          : attack * math.exp(-t * 2.4);
-      final sample = (wave * envelope * 0.72 * 32767).round().clamp(-32768, 32767).toInt();
+      final attack = (t / (sk5Retro ? 0.006 : 0.015)).clamp(0.0, 1.0);
+      final envelope = sk5Retro
+          ? attack * (0.72 * math.exp(-t * 1.1) + 0.28 * math.exp(-t * 4.8))
+          : electronic
+              ? attack * (0.82 + 0.18 * math.exp(-t * 1.4))
+              : attack * math.exp(-t * 2.4);
+      final rawSample = wave * envelope * (sk5Retro ? 0.68 : 0.72);
+      final outputSample = sk5Retro
+          ? (rawSample * 127).round() / 127
+          : rawSample;
+      final sample = (outputSample * 32767).round().clamp(-32768, 32767).toInt();
       bytes.setInt16(44 + i * 2, sample, Endian.little);
     }
     return bytes.buffer.asUint8List();
@@ -524,7 +547,7 @@ final selectedFile = files.first;
         } else {
           source = await audio.loadMem(
             'sampler_perreo_${pianoTone.toLowerCase()}_$note.wav',
-            _makeToneWav(note, electronic: pianoTone == 'Electrónico'),
+            _makeToneWav(note, tone: pianoTone),
             mode: LoadMode.memory,
           );
         }
@@ -1072,7 +1095,7 @@ final selectedFile = files.first;
           Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: compact ? 7 : 10, fontWeight: FontWeight.bold)),
           SizedBox(height: compact ? 1 : 5),
           DropdownButton<String>(value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
-            items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10)))],
+            items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'SK-5 Retro', child: Text('SK-5 Retro', style: TextStyle(fontSize: 10)))],
             onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } }),
         ])),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(25, (i) {
