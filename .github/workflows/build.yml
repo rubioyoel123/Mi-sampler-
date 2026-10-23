@@ -26,7 +26,7 @@ jobs:
         run: flutter config --enable-windows-desktop
 
       - name: Crear archivos de Windows
-        run: flutter create --platforms=windows .
+        run: flutter create --platforms=windows,android .
 
       - name: Descargar samples autenticos Casio SK-5 (CC0)
         shell: bash
@@ -115,8 +115,17 @@ jobs:
       - name: Compilar Sampler Perreo
         run: flutter build windows --release
 
-      - name: Guardar aplicacion compilada
+      - name: Guardar aplicacion compilada para Windows
         uses: actions/upload-artifact@v4
         with:
           name: Sampler-Perreo-Windows
           path: build/windows/x64/runner/Release/
+
+      - name: Compilar Sampler Perreo para Android
+        run: flutter build apk --release
+
+      - name: Guardar APK para Android
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sampler-Perreo-Android
+          path: build/app/outputs/flutter-apk/app-release.apk
