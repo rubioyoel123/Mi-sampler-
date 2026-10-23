@@ -689,7 +689,7 @@ final selectedFile = files.first;
               onPressed: () => setState(() => showPiano = !showPiano),
               icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: Colors.cyanAccent),
               label: Text(showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
-                  style: const TextStyle(color: uiAccent, fontSize: 11)),
+                  style: TextStyle(color: uiAccent, fontSize: 11)),
             )),
             _buildStatusBar(),
           ]),
@@ -949,7 +949,7 @@ final selectedFile = files.first;
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 5),
       child: GridView.builder(
         itemCount: pads.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
           crossAxisSpacing: 4,
           mainAxisSpacing: 4,
