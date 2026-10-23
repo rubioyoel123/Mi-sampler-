@@ -36,6 +36,48 @@ jobs:
           manifest.write_text(content)
           PY
 
+      - name: Descargar samples autenticos Casio SK-5 (CC0)
+        run: |
+          python3 - <<'PY'
+          import io, os, re, urllib.request, zipfile
+          from pathlib import Path
+          url = "https://storage.googleapis.com/www-frequency303-com-data-prod/SK-5-Drums.zip"
+          print("Descargando paquete SK-5 CC0...")
+          data = urllib.request.urlopen(url, timeout=60).read()
+          archive = zipfile.ZipFile(io.BytesIO(data))
+          files = [n for n in archive.namelist() if not n.endswith("/") and n.lower().endswith((".wav", ".wave"))]
+          print("WAV encontrados:", [Path(n).name for n in files])
+          targets = {
+            "kick.wav": ["kick"],
+            "snare.wav": ["snare"],
+            "hihat.wav": ["hihat", "hi hat", "hi-hat", "hat"],
+            "conga_high.wav": ["conga high", "conga_high", "high conga", "bongo high", "high bongo"],
+            "conga_low.wav": ["conga low", "conga_low", "low conga", "bongo low", "low bongo"],
+            "laser.wav": ["laser", "lazer"],
+            "dog.wav": ["dog", "bark"],
+            "lion.wav": ["lion", "roar"],
+          }
+          def norm(s):
+            return re.sub(r"[^a-z0-9]+", " ", Path(s).stem.lower()).strip()
+          chosen = {}
+          for out, aliases in targets.items():
+            matches = []
+            for name in files:
+              stem = norm(name)
+              if any(alias in stem for alias in aliases):
+                matches.append(name)
+            if matches:
+              chosen[out] = matches[0]
+          missing = sorted(set(targets) - set(chosen))
+          if missing:
+            raise SystemExit("Faltan samples SK-5 requeridos: " + ", ".join(missing))
+          outdir = Path("assets/sk5")
+          outdir.mkdir(parents=True, exist_ok=True)
+          for out, source in chosen.items():
+            (outdir / out).write_bytes(archive.read(source))
+            print(source, "->", out)
+          PY
+
       - name: Instalar dependencias
         run: flutter pub get
 
