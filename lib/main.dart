@@ -973,7 +973,7 @@ final selectedFile = files.first;
               value: editorPadIndex, isDense: true, underline: const SizedBox.shrink(),
               dropdownColor: const Color(0xFF20202B),
               items: List.generate(16, (i) => DropdownMenuItem(
-                value: i, child: Text('P\u0024{i + 1}', style: const TextStyle(fontSize: 9)))),
+                value: i, child: Text('P${i + 1}', style: const TextStyle(fontSize: 9)))),
               onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); },
             ),
           ]),
@@ -988,14 +988,14 @@ final selectedFile = files.first;
             Expanded(child: Slider(value: editorIn, min: 0,
               max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
               activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v))),
-            Text('\u0024{(editorIn * 100).round()}%', style: const TextStyle(fontSize: 8)),
+            Text('${(editorIn * 100).round()}%', style: const TextStyle(fontSize: 8)),
           ]),
           Row(children: [
             const Text('OUT', style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
             Expanded(child: Slider(value: editorOut,
               min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(), max: 1,
               activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v))),
-            Text('\u0024{(editorOut * 100).round()}%', style: const TextStyle(fontSize: 8)),
+            Text('${(editorOut * 100).round()}%', style: const TextStyle(fontSize: 8)),
           ]),
           Row(children: [
             Expanded(child: SizedBox(height: 23, child: OutlinedButton(
@@ -1008,7 +1008,7 @@ final selectedFile = files.first;
               style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap),
               onPressed: pad.audioPath == null ? null : () => _showStatus(
-                'Corte marcado en \u0024{pad.name}: IN \u0024{editorIn.toStringAsFixed(2)} · OUT \u0024{editorOut.toStringAsFixed(2)}. El recorte/exportación real aún no está implementado.'),
+                'Corte marcado en ${pad.name}: IN ${editorIn.toStringAsFixed(2)} · OUT ${editorOut.toStringAsFixed(2)}. El recorte/exportación real aún no está implementado.'),
               child: const Icon(Icons.content_cut, size: 13)))),
           ]),
         ],
