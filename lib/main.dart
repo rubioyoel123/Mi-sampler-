@@ -707,8 +707,8 @@ final selectedFile = files.first;
   Widget _buildVirtualPiano() {
     const labels = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
     return Container(
-      height: 104,
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      height: 86,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
       child: Row(children: [
@@ -789,9 +789,9 @@ final selectedFile = files.first;
         itemCount: pads.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: 7,
-          mainAxisSpacing: 7,
-          childAspectRatio: 1.15,
+          crossAxisSpacing: 5,
+          mainAxisSpacing: 5,
+          childAspectRatio: 1.28,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
@@ -818,7 +818,7 @@ final selectedFile = files.first;
                   : [],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(5),
+              padding: const EdgeInsets.all(4),
               child: Column(
                 children: [
                   Row(
@@ -850,7 +850,7 @@ final selectedFile = files.first;
                       child: Center(
                         child: Icon(
                           hasAudio ? Icons.music_note : Icons.library_music,
-                          size: 25,
+                          size: 19,
                           color: Colors.white,
                         ),
                       ),
@@ -858,7 +858,7 @@ final selectedFile = files.first;
                   ),
                   SizedBox(
                     width: double.infinity,
-                    height: 28,
+                    height: 23,
                     child: ElevatedButton.icon(
                       onPressed: () => _loadAudio(index),
                       style: ElevatedButton.styleFrom(
@@ -954,7 +954,7 @@ class RotaryKnob extends StatelessWidget {
         label == 'PITCH' ? 1.0 : 0.8,
       ),
       child: SizedBox(
-        width: 64,
+        width: 54,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -967,7 +967,7 @@ class RotaryKnob extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             CustomPaint(
-              size: const Size(42, 42),
+              size: const Size(34, 34),
               painter: KnobPainter(
                 progress: ((value - min) / (max - min)).clamp(0.0, 1.0),
                 accent: accent,
