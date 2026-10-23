@@ -674,25 +674,56 @@ final selectedFile = files.first;
           ],
         ),
         body: SafeArea(
-          child: Column(children: [
-            Row(children: [
-              Expanded(flex: 3, child: _buildMasterControls()),
-              Expanded(flex: 4, child: _buildBankSelector()),
-            ]),
-            Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Expanded(flex: 5, child: _buildPads()),
-              if (showEditor) Expanded(flex: 4, child: _buildAudioEditorPanel()),
-            ])),
-            _buildEffectsPanel(),
-            if (showPiano) _buildVirtualPiano(),
-            Align(alignment: Alignment.centerRight, child: TextButton.icon(
-              onPressed: () => setState(() => showPiano = !showPiano),
-              icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: Colors.cyanAccent),
-              label: Text(showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
-                  style: TextStyle(color: uiAccent, fontSize: 11)),
-            )),
-            _buildStatusBar(),
-          ]),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 720 || constraints.maxWidth < 1000;
+              return Column(
+                children: [
+                  SizedBox(
+                    height: compact ? 62 : 74,
+                    child: Row(
+                      children: [
+                        Expanded(flex: 5, child: _buildMasterControls(compact: compact)),
+                        Expanded(flex: 4, child: _buildBankSelector()),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(flex: 6, child: _buildPads(compact: compact)),
+                        if (showEditor)
+                          Expanded(flex: compact ? 3 : 4, child: _buildAudioEditorPanel()),
+                      ],
+                    ),
+                  ),
+                  _buildEffectsPanel(compact: compact),
+                  if (showPiano) _buildVirtualPiano(compact: compact),
+                  SizedBox(
+                    height: compact ? 28 : 34,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => setState(() => showPiano = !showPiano),
+                        icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 16),
+                        label: Text(
+                          showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
+                          style: TextStyle(color: uiAccent, fontSize: 10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _buildStatusBar(),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -728,10 +759,10 @@ final selectedFile = files.first;
     }
   }
 
-  Widget _buildMasterControls() {
+  Widget _buildMasterControls({bool compact = false}) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: EdgeInsets.fromLTRB(compact ? 5 : 10, 4, 5, 4),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 12, vertical: compact ? 4 : 8),
       decoration: BoxDecoration(
         color: const Color(0xFF191923),
         borderRadius: BorderRadius.circular(12),
@@ -744,13 +775,14 @@ final selectedFile = files.first;
               'CONTROLES MAESTROS',
               style: TextStyle(
                 color: Colors.cyanAccent,
-                fontSize: 11,
+                fontSize: compact ? 9 : 11,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 0.7,
+                letterSpacing: 0.4,
               ),
             ),
           ),
           RotaryKnob(
+            compact: compact,
             label: 'VOLUMEN',
             value: masterVolume,
             min: 0,
@@ -761,8 +793,9 @@ final selectedFile = files.first;
               _saveSettings();
             },
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: compact ? 3 : 14),
           RotaryKnob(
+            compact: compact,
             label: 'PITCH',
             value: masterPitch,
             min: 0.5,
@@ -778,23 +811,31 @@ final selectedFile = files.first;
     );
   }
 
-  Widget _buildEffectsPanel() {
+  Widget _buildEffectsPanel({bool compact = false}) {
     Widget knob(String label, double value, double min, double max,
         ValueChanged<double> change, String display, Color color) => Expanded(
-      child: RotaryKnob(label: label, value: value, min: min, max: max,
-        display: display, accent: color, onChanged: (v) {
+      child: RotaryKnob(
+        compact: true,
+        label: label,
+        value: value,
+        min: min,
+        max: max,
+        display: display,
+        accent: color,
+        onChanged: (v) {
           setState(() => change(v));
           _applyEffects();
-        }),
+        },
+      ),
     );
     return Container(
-      margin: const EdgeInsets.fromLTRB(10, 3, 10, 5),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      margin: EdgeInsets.fromLTRB(compact ? 5 : 10, 2, compact ? 5 : 10, 3),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 10, vertical: compact ? 4 : 7),
       decoration: BoxDecoration(color: const Color(0xFF14141C),
         borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('EFECTOS MAESTROS · PERILLAS FUNCIONALES',
-          style: TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text('EFECTOS MAESTROS',
+          style: TextStyle(color: uiAccent, fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold)),
         Row(children: [
           knob('ECO DELAY', echoDelay, 0.05, 1.0, (v) { echoDelay = v; echoEnabled = true; },
             '${echoDelay.toStringAsFixed(2)} s', Colors.purpleAccent),
@@ -807,18 +848,50 @@ final selectedFile = files.first;
           knob('FLANGER', flangerAmount, 0.0, 1.0, (v) { flangerAmount = v; flangerEnabled = v > 0.01; },
             '${(flangerAmount * 100).round()}%', Colors.orangeAccent),
         ]),
-        Row(children: [
-          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
-            title: const Text('ECO', style: TextStyle(fontSize: 10)), value: echoEnabled,
-            onChanged: (v) { setState(() => echoEnabled = v); _applyEffects(); _saveSettings(); })),
-          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
-            title: const Text('REVERB', style: TextStyle(fontSize: 10)), value: reverbEnabled,
-            onChanged: (v) { setState(() => reverbEnabled = v); _applyEffects(); _saveSettings(); })),
-          Expanded(child: SwitchListTile(dense: true, contentPadding: EdgeInsets.zero,
-            title: const Text('FLANGER', style: TextStyle(fontSize: 10)), value: flangerEnabled,
-            onChanged: (v) { setState(() => flangerEnabled = v); _applyEffects(); _saveSettings(); })),
-        ]),
+        Row(
+          children: [
+            _effectToggle('ECO', echoEnabled, (v) {
+              setState(() => echoEnabled = v);
+              _applyEffects();
+              _saveSettings();
+            }),
+            _effectToggle('REVERB', reverbEnabled, (v) {
+              setState(() => reverbEnabled = v);
+              _applyEffects();
+              _saveSettings();
+            }),
+            _effectToggle('FLANGER', flangerEnabled, (v) {
+              setState(() => flangerEnabled = v);
+              _applyEffects();
+              _saveSettings();
+            }),
+          ],
+        ),
       ]),
+    );
+  }
+
+  Widget _effectToggle(String label, bool value, ValueChanged<bool> onChanged) {
+    return Expanded(
+      child: SizedBox(
+        height: 28,
+        child: Row(
+          children: [
+            Flexible(
+              child: Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
+            ),
+            Transform.scale(
+              scale: 0.68,
+              child: Switch(
+                value: value,
+                onChanged: onChanged,
+                activeColor: uiAccent,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -866,12 +939,12 @@ final selectedFile = files.first;
     );
   }
 
-  Widget _buildVirtualPiano() {
+  Widget _buildVirtualPiano({bool compact = false}) {
     const labels = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
     return Container(
-      height: 86,
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      padding: const EdgeInsets.all(5),
+      height: compact ? 62 : 86,
+      margin: EdgeInsets.symmetric(horizontal: compact ? 5 : 8, vertical: 1),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
       child: Row(children: [
         SizedBox(width: 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -944,16 +1017,16 @@ final selectedFile = files.first;
     );
   }
 
-  Widget _buildPads() {
+  Widget _buildPads({bool compact = false}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 5),
+      padding: EdgeInsets.fromLTRB(compact ? 5 : 8, 3, compact ? 4 : 8, 4),
       child: GridView.builder(
         itemCount: pads.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
           crossAxisSpacing: 4,
           mainAxisSpacing: 4,
-          childAspectRatio: compactPads ? 1.65 : 1.15,
+          childAspectRatio: compact ? (compactPads ? 2.0 : 1.45) : (compactPads ? 1.75 : 1.2),
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
@@ -980,7 +1053,7 @@ final selectedFile = files.first;
                   : [],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: EdgeInsets.all(compact ? 3 : 4),
               child: Column(
                 children: [
                   Row(
@@ -989,7 +1062,7 @@ final selectedFile = files.first;
                         child: Text(
                           pad.name,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: compact ? 9 : 11,
                             fontWeight: FontWeight.bold,
                             color: pad.color,
                           ),
@@ -1012,7 +1085,7 @@ final selectedFile = files.first;
                       child: Center(
                         child: Icon(
                           hasAudio ? Icons.music_note : Icons.library_music,
-                          size: 19,
+                          size: compact ? 15 : 19,
                           color: Colors.white,
                         ),
                       ),
@@ -1020,7 +1093,7 @@ final selectedFile = files.first;
                   ),
                   SizedBox(
                     width: double.infinity,
-                    height: 23,
+                    height: compact ? 19 : 23,
                     child: ElevatedButton.icon(
                       onPressed: () => _loadAudio(index),
                       style: ElevatedButton.styleFrom(
@@ -1039,7 +1112,7 @@ final selectedFile = files.first;
                         hasAudio ? 'CAMBIAR AUDIO' : 'CARGAR AUDIO',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 9),
+                        style: TextStyle(fontSize: compact ? 7 : 9),
                       ),
                     ),
                   ),
@@ -1051,7 +1124,7 @@ final selectedFile = files.first;
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 9,
+                      fontSize: compact ? 7 : 9,
                       color: Colors.white70,
                     ),
                   ),
@@ -1067,7 +1140,7 @@ final selectedFile = files.first;
   Widget _buildStatusBar() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       color: const Color(0xFF191923),
       child: Text(
         status,
@@ -1086,6 +1159,7 @@ final selectedFile = files.first;
 class RotaryKnob extends StatelessWidget {
   const RotaryKnob({
     super.key,
+    this.compact = false,
     required this.label,
     required this.value,
     required this.min,
@@ -1095,6 +1169,7 @@ class RotaryKnob extends StatelessWidget {
     this.accent = Colors.cyanAccent,
   });
 
+  final bool compact;
   final String label;
   final double value;
   final double min;
@@ -1116,31 +1191,31 @@ class RotaryKnob extends StatelessWidget {
         label == 'PITCH' ? 1.0 : 0.8,
       ),
       child: SizedBox(
-        width: 54,
+        width: compact ? 42 : 54,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               label,
               style: const TextStyle(
-                fontSize: 9,
+                fontSize: compact ? 7 : 9,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 3),
+            SizedBox(height: compact ? 1 : 3),
             CustomPaint(
-              size: const Size(34, 34),
+              size: Size.square(compact ? 25 : 34),
               painter: KnobPainter(
                 progress: ((value - min) / (max - min)).clamp(0.0, 1.0),
                 accent: accent,
               ),
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: compact ? 1 : 2),
             Text(
               display,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Colors.cyanAccent,
+              style: TextStyle(
+                fontSize: compact ? 8 : 10,
+                color: accent,
               ),
             ),
           ],
