@@ -70,7 +70,13 @@ class _SamplerHomeState extends State<SamplerHome> {
   final FocusNode keyboardFocus = FocusNode();
   final SoLoud audio = SoLoud.instance;
   final Map<String, AudioSource> _audioCache = {};
-  final Map<int, AudioSource> _pianoCache = {};
+  final Map<int, AudioSource> _pianoCache = {};\n  final Map<String, AudioSource> _sk5Cache = {};
+  static const List<String> _sk5PadSamples = [
+    'kick.wav', 'snare.wav', 'hihat.wav', 'conga_low.wav',
+    'conga_high.wav', 'laser.wav', 'dog.wav', 'lion.wav',
+    'kick.wav', 'snare.wav', 'hihat.wav', 'conga_low.wav',
+    'conga_high.wav', 'laser.wav', 'dog.wav', 'lion.wav',
+  ];
   final Map<int, String> pianoAudioPaths = {};
   String pianoTone = 'Piano';
   bool _audioReady = false;
@@ -461,6 +467,35 @@ final selectedFile = files.first;
       });
     } catch (e) {
       _showStatus('Error al reproducir: $e');
+    }
+  }
+
+  Future<void> _playBundledSk5(int index) async {
+    if (!_audioReady) {
+      _showStatus('El motor de audio todavía está iniciando');
+      return;
+    }
+    final sample = _sk5PadSamples[index % _sk5PadSamples.length];
+    final assetPath = 'assets/sk5/$sample';
+    try {
+      var source = _sk5Cache[assetPath];
+      if (source == null) {
+        final data = await rootBundle.load(assetPath);
+        final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        source = await audio.loadMem('sk5_$sample', bytes, mode: LoadMode.memory);
+        _sk5Cache[assetPath] = source;
+      }
+      final pad = pads[index];
+      final handle = audio.play(source, volume: (masterVolume * pad.volume).clamp(0.0, 1.0));
+      pad.handle = handle;
+      audio.setRelativePlaySpeed(handle, (masterPitch * pad.pitch).clamp(0.5, 2.0));
+      if (mounted) setState(() => pad.active = true);
+      _showStatus('Casio SK-5 · ${sample.replaceAll('.wav', '').toUpperCase()} · PAD ${index + 1}');
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) setState(() => pad.active = false);
+      });
+    } catch (e) {
+      _showStatus('No se pudo cargar el sample SK-5 ($sample): $e');
     }
   }
 
