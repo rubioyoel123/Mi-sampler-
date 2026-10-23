@@ -685,40 +685,42 @@ final selectedFile = files.first;
                 return Column(
                   children: [
                     SizedBox(
-                      height: 34,
+                      height: 27,
                       child: Row(
                         children: [
                           Expanded(child: _buildBankSelector()),
                           IconButton(
                             visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
                             padding: EdgeInsets.zero,
                             tooltip: 'Ajustes',
                             onPressed: _openSettings,
-                            icon: Icon(Icons.tune, color: uiAccent, size: 19),
+                            icon: Icon(Icons.tune, color: uiAccent, size: 16),
                           ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
                             padding: EdgeInsets.zero,
                             tooltip: 'Detener todos',
                             onPressed: _stopAll,
-                            icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 19),
+                            icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 16),
                           ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 27, height: 27),
                             padding: EdgeInsets.zero,
                             tooltip: showPiano ? 'Ocultar piano' : 'Mostrar piano',
                             onPressed: () => setState(() => showPiano = !showPiano),
-                            icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 19),
+                            icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 16),
                           ),
                         ],
                       ),
                     ),
                     Expanded(
-                      flex: showPiano ? 3 : 1,
                       child: _buildPads(compact: true),
                     ),
                     if (showPiano) _buildVirtualPiano(compact: true),
-                    SizedBox(height: 22, child: _buildStatusBar()),
+                    SizedBox(height: 15, child: _buildStatusBar()),
                   ],
                 );
               }
@@ -821,7 +823,7 @@ final selectedFile = files.first;
               'CONTROLES MAESTROS',
               style: TextStyle(
                 color: Colors.cyanAccent,
-                fontSize: compact ? 9 : 11,
+                fontSize: compact ? 8 : 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.4,
               ),
@@ -988,14 +990,14 @@ final selectedFile = files.first;
   Widget _buildVirtualPiano({bool compact = false}) {
     const labels = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
     return Container(
-      height: compact ? 62 : 86,
-      margin: EdgeInsets.symmetric(horizontal: compact ? 5 : 8, vertical: 1),
-      padding: const EdgeInsets.all(4),
+      height: compact ? 48 : 86,
+      margin: EdgeInsets.symmetric(horizontal: compact ? 2 : 8, vertical: 1),
+      padding: EdgeInsets.all(compact ? 2 : 4),
       decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
       child: Row(children: [
-        SizedBox(width: 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
+        SizedBox(width: compact ? 58 : 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: compact ? 7 : 10, fontWeight: FontWeight.bold)),
+          SizedBox(height: compact ? 1 : 5),
           DropdownButton<String>(value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
             items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10)))],
             onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } }),
@@ -1004,7 +1006,7 @@ final selectedFile = files.first;
           final note = 60 + i;
           final isBlack = const [1, 3, 6, 8, 10].contains(note % 12);
           final custom = pianoAudioPaths.containsKey(note);
-          return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: Tooltip(
+          return Expanded(child: Padding(padding: EdgeInsets.symmetric(horizontal: compact ? 0.3 : 1), child: Tooltip(
             message: 'MIDI $note · Mantén pulsado para cargar un audio propio',
             child: Material(color: isBlack ? const Color(0xFF343443) : Colors.white, borderRadius: BorderRadius.circular(3),
               child: InkWell(onTap: () => _playPianoNote(note), onLongPress: () => _loadPianoAudio(note),
@@ -1065,14 +1067,14 @@ final selectedFile = files.first;
 
   Widget _buildPads({bool compact = false}) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(compact ? 5 : 8, 3, compact ? 4 : 8, 4),
+      padding: EdgeInsets.fromLTRB(compact ? 2 : 8, compact ? 1 : 3, compact ? 2 : 8, compact ? 1 : 4),
       child: GridView.builder(
         itemCount: pads.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-          childAspectRatio: compact ? (compactPads ? 2.0 : 1.45) : (compactPads ? 1.75 : 1.2),
+          crossAxisSpacing: compact ? 2 : 4,
+          mainAxisSpacing: compact ? 2 : 4,
+          childAspectRatio: compact ? 2.35 : (compactPads ? 1.75 : 1.2),
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
@@ -1099,7 +1101,7 @@ final selectedFile = files.first;
                   : [],
             ),
             child: Padding(
-              padding: EdgeInsets.all(compact ? 3 : 4),
+              padding: EdgeInsets.all(compact ? 2 : 4),
               child: Column(
                 children: [
                   Row(
@@ -1139,7 +1141,7 @@ final selectedFile = files.first;
                   ),
                   SizedBox(
                     width: double.infinity,
-                    height: compact ? 19 : 23,
+                    height: compact ? 15 : 23,
                     child: ElevatedButton.icon(
                       onPressed: () => _loadAudio(index),
                       style: ElevatedButton.styleFrom(
@@ -1158,7 +1160,7 @@ final selectedFile = files.first;
                         hasAudio ? 'CAMBIAR AUDIO' : 'CARGAR AUDIO',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: compact ? 7 : 9),
+                        style: TextStyle(fontSize: compact ? 6 : 9),
                       ),
                     ),
                   ),
@@ -1170,7 +1172,7 @@ final selectedFile = files.first;
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: compact ? 7 : 9,
+                      fontSize: compact ? 6 : 9,
                       color: Colors.white70,
                     ),
                   ),
