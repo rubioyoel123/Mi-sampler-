@@ -33,7 +33,7 @@ class PadKit {
         throw FormatException('Índice de pad duplicado: $index');
       }
 
-      final note = _intAttribute(element, 'note', 60).clamp(0, 127);
+      final note = _intAttribute(element, 'note', 60).clamp(0, 127).toInt();
       final gain = _doubleAttribute(element, 'gain', 1.0).clamp(0.0, 4.0).toDouble();
       final pan = _doubleAttribute(element, 'pan', 0.0).clamp(-1.0, 1.0).toDouble();
       final volumeCC = _intAttribute(element, 'volumeCC', -1);
@@ -60,7 +60,7 @@ class PadKit {
     }
     return PadKit(
       masterGain: _doubleAttribute(root, 'masterGain', 1.0).clamp(0.0, 1.0).toDouble(),
-      masterCC: _intAttribute(root, 'masterCC', -1).clamp(-1, 127),
+      masterCC: _intAttribute(root, 'masterCC', -1).clamp(-1, 127).toInt(),
       velocityCurve: _intAttribute(root, 'velocityCurve', 0),
       pads: List.unmodifiable(pads),
     );
