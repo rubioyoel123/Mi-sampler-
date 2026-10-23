@@ -400,7 +400,7 @@ final selectedFile = files.first;
       final envelope = electronic
           ? attack * (0.82 + 0.18 * math.exp(-t * 1.4))
           : attack * math.exp(-t * 2.4);
-      final sample = (wave * envelope * 0.72 * 32767).round().clamp(-32768, 32767);
+      final sample = (wave * envelope * 0.72 * 32767).round().clamp(-32768, 32767).toInt();
       bytes.setInt16(44 + i * 2, sample, Endian.little);
     }
     return bytes.buffer.asUint8List();
