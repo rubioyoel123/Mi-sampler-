@@ -718,7 +718,7 @@ final selectedFile = files.first;
                       child: _buildPads(compact: true),
                     ),
                     if (showPiano) _buildVirtualPiano(compact: true),
-                    SizedBox(height: 18, child: _buildStatusBar()),
+                    SizedBox(height: 22, child: _buildStatusBar()),
                   ],
                 );
               }
@@ -1021,7 +1021,7 @@ final selectedFile = files.first;
 
   Widget _buildBankSelector() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
       child: Row(
         children: [
           const Text(
