@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -69,6 +70,9 @@ class _SamplerHomeState extends State<SamplerHome> {
   final FocusNode keyboardFocus = FocusNode();
   final SoLoud audio = SoLoud.instance;
   final Map<String, AudioSource> _audioCache = {};
+  final Map<int, AudioSource> _pianoCache = {};
+  final Map<int, String> pianoAudioPaths = {};
+  String pianoTone = 'Piano';
   bool _audioReady = false;
   bool echoEnabled = false;
   bool reverbEnabled = false;
@@ -143,6 +147,11 @@ class _SamplerHomeState extends State<SamplerHome> {
       setState(() {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
+        pianoTone = prefs.getString('pianoTone') ?? 'Piano';
+        for (int note = 48; note <= 84; note++) {
+          final path = prefs.getString('piano_note_$note');
+          if (path != null) pianoAudioPaths[note] = path;
+        }
 
         selectedBank = (prefs.getInt('selectedBank') ?? 0).clamp(0, 3);
         echoEnabled = prefs.getBool('fx_echo') ?? false;
@@ -170,6 +179,15 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       await prefs.setDouble('masterVolume', masterVolume);
       await prefs.setDouble('masterPitch', masterPitch);
+      await prefs.setString('pianoTone', pianoTone);
+      for (int note = 48; note <= 84; note++) {
+        final path = pianoAudioPaths[note];
+        if (path == null) {
+          await prefs.remove('piano_note_$note');
+        } else {
+          await prefs.setString('piano_note_$note', path);
+        }
+      }
       await prefs.setInt('selectedBank', selectedBank);
       await prefs.setBool('fx_echo', echoEnabled);
       await prefs.setBool('fx_reverb', reverbEnabled);
@@ -236,11 +254,11 @@ class _SamplerHomeState extends State<SamplerHome> {
           return;
         }
 
-        final index =
-            pads.indexWhere((pad) => pad.midiNote == message.note);
-
+        final index = pads.indexWhere((pad) => pad.midiNote == message.note);
         if (index != -1) {
           _playPad(index);
+        } else if (message.note >= 48 && message.note <= 84) {
+          _playPianoNote(message.note);
         }
       });
 
@@ -339,6 +357,100 @@ final selectedFile = files.first;
       });
     } catch (e) {
       _showStatus('Error al reproducir: $e');
+    }
+  }
+
+  // Genera sonidos WAV dentro de la propia aplicación: no requiere descargar muestras.
+  Uint8List _makeToneWav(int midiNote, {required bool electronic}) {
+    const sampleRate = 22050;
+    const seconds = 1.2;
+    const bitsPerSample = 16;
+    final sampleCount = (sampleRate * seconds).round();
+    final dataSize = sampleCount * 2;
+    final bytes = ByteData(44 + dataSize);
+    final frequency = 440.0 * math.pow(2.0, (midiNote - 69) / 12.0);
+    void writeAscii(int offset, String value) {
+      for (int i = 0; i < value.length; i++) {
+        bytes.setUint8(offset + i, value.codeUnitAt(i));
+      }
+    }
+    writeAscii(0, 'RIFF');
+    bytes.setUint32(4, 36 + dataSize, Endian.little);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    bytes.setUint32(16, 16, Endian.little);
+    bytes.setUint16(20, 1, Endian.little);
+    bytes.setUint16(22, 1, Endian.little);
+    bytes.setUint32(24, sampleRate, Endian.little);
+    bytes.setUint32(28, sampleRate * 2, Endian.little);
+    bytes.setUint16(32, 2, Endian.little);
+    bytes.setUint16(34, bitsPerSample, Endian.little);
+    writeAscii(36, 'data');
+    bytes.setUint32(40, dataSize, Endian.little);
+    for (int i = 0; i < sampleCount; i++) {
+      final t = i / sampleRate;
+      final phase = 2 * math.pi * frequency * t;
+      double wave;
+      if (electronic) {
+        wave = (2 / math.pi) * math.asin(math.sin(phase));
+      } else {
+        wave = math.sin(phase) * 0.68 + math.sin(phase * 2) * 0.22 + math.sin(phase * 3) * 0.10;
+      }
+      final attack = (t / 0.015).clamp(0.0, 1.0);
+      final envelope = electronic
+          ? attack * (0.82 + 0.18 * math.exp(-t * 1.4))
+          : attack * math.exp(-t * 2.4);
+      final sample = (wave * envelope * 0.72 * 32767).round().clamp(-32768, 32767);
+      bytes.setInt16(44 + i * 2, sample, Endian.little);
+    }
+    return bytes.buffer.asUint8List();
+  }
+
+  Future<void> _playPianoNote(int note) async {
+    if (!_audioReady) {
+      _showStatus('El motor de audio todavía está iniciando');
+      return;
+    }
+    try {
+      AudioSource? source = _pianoCache[note];
+      final customPath = pianoAudioPaths[note];
+      if (source == null) {
+        if (customPath != null && await File(customPath).exists()) {
+          source = await audio.loadFile(customPath);
+        } else {
+          source = await audio.loadMem(
+            'sampler_perreo_${pianoTone.toLowerCase()}_$note.wav',
+            _makeToneWav(note, electronic: pianoTone == 'Electrónico'),
+            mode: LoadMode.memory,
+          );
+        }
+        _pianoCache[note] = source;
+      }
+      audio.play(source, volume: masterVolume);
+      _showStatus('${pianoTone.toUpperCase()} · nota MIDI $note');
+    } catch (e) {
+      _showStatus('No se pudo reproducir la nota: $e');
+    }
+  }
+
+  Future<void> _loadPianoAudio(int note) async {
+    try {
+      final result = await FilePicker.pickFiles(type: FileType.audio);
+      if (result.isEmpty || result.first.path == null) {
+        _showStatus('No seleccionaste ningún audio');
+        return;
+      }
+      final copiedPath = await _copyAudioToLibrary(result.first.path!);
+      pianoAudioPaths[note] = copiedPath;
+      final oldSource = _pianoCache.remove(note);
+      if (oldSource != null && _audioReady) {
+        await audio.disposeSource(oldSource);
+      }
+      await _saveSettings();
+      if (mounted) setState(() {});
+      _showStatus('Audio personalizado asignado a la nota MIDI $note');
+    } catch (e) {
+      _showStatus('No se pudo asignar el audio: $e');
     }
   }
 
@@ -593,25 +705,34 @@ final selectedFile = files.first;
   }
 
   Widget _buildVirtualPiano() {
-    const labels = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    return Container(height: 82, margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFF12121A),
-        borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
+    const labels = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    return Container(
+      height: 104,
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
       child: Row(children: [
-        Container(width: 75, alignment: Alignment.center, child: const Text('PIANO\\nVIRTUAL',
-          textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold))),
+        SizedBox(width: 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          DropdownButton<String>(value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
+            items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10)))],
+            onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } }),
+        ])),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(25, (i) {
-          const semitones = [0, 2, 4, 5, 7, 9, 11];
-          final note = semitones[i % 7] + (i ~/ 7) * 12;
-          return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: Material(color: Colors.white, borderRadius: BorderRadius.circular(3),
-              child: InkWell(onTap: () {
-                final idx = note % 16;
-                _playPad(idx);
-                _showStatus('Tecla virtual · MIDI ${36 + note}');
-              }, child: Align(alignment: Alignment.bottomCenter,
-                child: Padding(padding: const EdgeInsets.only(bottom: 3),
-                  child: Text(labels[i % 7], style: const TextStyle(color: Colors.black, fontSize: 8))))))));
+          final note = 60 + i;
+          final isBlack = const [1, 3, 6, 8, 10].contains(note % 12);
+          final custom = pianoAudioPaths.containsKey(note);
+          return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: Tooltip(
+            message: 'MIDI $note · Mantén pulsado para cargar un audio propio',
+            child: Material(color: isBlack ? const Color(0xFF343443) : Colors.white, borderRadius: BorderRadius.circular(3),
+              child: InkWell(onTap: () => _playPianoNote(note), onLongPress: () => _loadPianoAudio(note),
+                child: Stack(children: [
+                  Align(alignment: Alignment.bottomCenter, child: Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(labels[note % 12], style: TextStyle(color: isBlack ? Colors.white : Colors.black, fontSize: 8)))),
+                  if (custom) const Positioned(top: 2, right: 2, child: Icon(Icons.music_note, size: 9, color: Colors.green)),
+                ])),
+            ),
+          )));
         }))),
       ]),
     );
