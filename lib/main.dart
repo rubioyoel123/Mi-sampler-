@@ -534,10 +534,34 @@ final selectedFile = files.first;
                 color: Colors.redAccent,
               ),
             ),
-            IconButton(
-              tooltip: 'Guardar ajustes',
-              onPressed: _saveSettings,
-              icon: const Icon(Icons.save),
+            PopupMenuButton<String>(
+              tooltip: 'Menú de Sampler Perreo',
+              color: const Color(0xFF171D29),
+              icon: const Icon(Icons.menu, color: Colors.cyanAccent),
+              onSelected: (choice) {
+                if (choice == 'save') _saveSettings();
+                if (choice == 'stop') _stopAll();
+                if (choice == 'piano') setState(() => showPiano = !showPiano);
+                if (choice == 'load') _loadAudio(editorPadIndex);
+                if (choice == 'midi') _showMidiDevices();
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'save', child: ListTile(
+                  dense: true, leading: Icon(Icons.save, color: Colors.cyanAccent),
+                  title: Text('Guardar ajustes'))),
+                PopupMenuItem(value: 'load', child: ListTile(
+                  dense: true, leading: Icon(Icons.audio_file, color: Colors.cyanAccent),
+                  title: Text('Cargar audio al pad seleccionado'))),
+                PopupMenuItem(value: 'piano', child: ListTile(
+                  dense: true, leading: Icon(Icons.piano, color: Colors.cyanAccent),
+                  title: Text('Mostrar / ocultar piano'))),
+                PopupMenuItem(value: 'midi', child: ListTile(
+                  dense: true, leading: Icon(Icons.piano, color: Colors.cyanAccent),
+                  title: Text('Dispositivos MIDI'))),
+                PopupMenuItem(value: 'stop', child: ListTile(
+                  dense: true, leading: Icon(Icons.stop_circle, color: Colors.redAccent),
+                  title: Text('Detener todos los audios'))),
+              ],
             ),
           ],
         ),
@@ -564,6 +588,36 @@ final selectedFile = files.first;
         ),
       ),
     );
+  }
+
+  Future<void> _showMidiDevices() async {
+    try {
+      midiDevices = await midi.devices ?? [];
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF171D29),
+          title: const Text('Dispositivos MIDI'),
+          content: SizedBox(
+            width: 340,
+            child: midiDevices.isEmpty
+                ? const Text('No se detectan dispositivos MIDI. Conecta tu controlador y vuelve a abrir este menú.')
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: midiDevices.map((device) => ListTile(
+                      leading: const Icon(Icons.piano, color: Colors.cyanAccent),
+                      title: Text(device.name ?? 'Controlador MIDI'),
+                      subtitle: Text(device.id ?? ''),
+                    )).toList(),
+                  ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('CERRAR'))],
+        ),
+      );
+    } catch (e) {
+      _showStatus('No se pudieron consultar dispositivos MIDI: $e');
+    }
   }
 
   Widget _buildMasterControls() {
@@ -784,14 +838,14 @@ final selectedFile = files.first;
 
   Widget _buildPads() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 5),
       child: GridView.builder(
         itemCount: pads.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: 5,
-          mainAxisSpacing: 5,
-          childAspectRatio: 1.28,
+          crossAxisSpacing: 4,
+          mainAxisSpacing: 4,
+          childAspectRatio: 1.65,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
