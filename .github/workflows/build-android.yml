@@ -103,7 +103,17 @@ jobs:
                 raise SystemExit("Sample vacío o inválido: " + url)
               (out / name).write_bytes(data)
               print(folder, name, len(data), "bytes")
+          # El banco Champeta combina percusión latina con efectos Casio SK-5.
+          sk5 = Path("assets/sk5")
+          champeta_dir = Path("assets/champeta")
+          for name in ("kick.wav", "snare.wav", "hihat.wav", "conga_low.wav", "conga_high.wav", "laser.wav", "dog.wav", "lion.wav"):
+            source = sk5 / name
+            if not source.exists():
+              raise SystemExit("Falta sample Casio SK-5 para Champeta: " + name)
+            (champeta_dir / name).write_bytes(source.read_bytes())
+            print("champeta FX", name, "copiado desde Casio SK-5")
           PY
+
 
       - name: Instalar dependencias
         run: flutter pub get
