@@ -72,10 +72,10 @@ class _SamplerHomeState extends State<SamplerHome> {
   final Map<String, AudioSource> _audioCache = {};
   final Map<int, AudioSource> _pianoCache = {};
   final Map<String, AudioSource> _sk5Cache = {};
-  static const List<String> _champetaPadSamples = ['conga-low.wav','conga-high.wav','timbale-low-twin.wav','timbale-high-twin.wav','cowbell.wav','shaker.wav','clave.wav','clave-low.wav','kick-beater.wav','kick-tight-beater.wav','snare.wav','clap.wav','808-c.wav','808-f.wav','808-g.wav','808-long.wav'];
+  static const List<String> _champetaPadSamples = ['conga-low.wav','conga-high.wav','timbale-low-twin.wav','timbale-high-twin.wav','cowbell.wav','shaker.wav','clave.wav','clave-low.wav','kick.wav','snare.wav','hihat.wav','laser.wav','dog.wav','lion.wav','clap.wav','kick-beater.wav'];
   static const List<String> _dembowPadSamples = ['kick-beater.wav','snare.wav','kick-tight-beater.wav','clap.wav','808-c.wav','808-f.wav','808-g.wav','808-long.wav','clave.wav','clave-low.wav','timbale-low-twin.wav','timbale-high-twin.wav','conga-low.wav','conga-high.wav','cowbell.wav','shaker.wav'];
   static const List<String> _sk5PadSamples = ['kick.wav','snare.wav','hihat.wav','conga_low.wav','conga_high.wav','laser.wav','dog.wav','lion.wav','kick.wav','snare.wav','hihat.wav','conga_low.wav','conga_high.wav','laser.wav','dog.wav','lion.wav'];
-  static const List<String> _champetaPadLabels = ['CONGA LOW','CONGA HIGH','TIMBAL LOW','TIMBAL HIGH','COWBELL','SHAKER','CLAVE','CLAVE LOW','KICK','KICK TIGHT','SNARE','CLAP','808 C','808 F','808 G','808 LONG'];
+  static const List<String> _champetaPadLabels = ['CONGA LOW','CONGA HIGH','TIMBAL LOW','TIMBAL HIGH','COWBELL','SHAKER','CLAVE','CLAVE LOW','KICK SK-5','SNARE SK-5','HI-HAT','FX LASER','FX DOG','FX LION','CLAP','KICK TIGHT'];
   static const List<String> _dembowPadLabels = ['KICK','SNARE','KICK TIGHT','CLAP','808 C','808 F','808 G','808 LONG','CLAVE','CLAVE LOW','TIMBAL LOW','TIMBAL HIGH','CONGA LOW','CONGA HIGH','COWBELL','SHAKER'];
   static const List<String> _sk5PadLabels = ['KICK','SNARE','HI-HAT','BONGO LOW','BONGO HIGH','LASER','DOG','LION','KICK 2','SNARE 2','HI-HAT 2','BONGO LOW 2','BONGO HIGH 2','LASER 2','DOG 2','LION 2'];
   final Map<int, String> pianoAudioPaths = {};
