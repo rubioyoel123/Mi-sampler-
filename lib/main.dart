@@ -70,7 +70,8 @@ class _SamplerHomeState extends State<SamplerHome> {
   final FocusNode keyboardFocus = FocusNode();
   final SoLoud audio = SoLoud.instance;
   final Map<String, AudioSource> _audioCache = {};
-  final Map<int, AudioSource> _pianoCache = {};\n  final Map<String, AudioSource> _sk5Cache = {};
+  final Map<int, AudioSource> _pianoCache = {};
+  final Map<String, AudioSource> _sk5Cache = {};
   static const List<String> _sk5PadSamples = [
     'kick.wav', 'snare.wav', 'hihat.wav', 'conga_low.wav',
     'conga_high.wav', 'laser.wav', 'dog.wav', 'lion.wav',
