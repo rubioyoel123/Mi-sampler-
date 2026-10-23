@@ -1072,9 +1072,9 @@ final selectedFile = files.first;
         itemCount: pads.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: compact ? 2 : 4,
-          mainAxisSpacing: compact ? 2 : 4,
-          childAspectRatio: compact ? 2.35 : (compactPads ? 1.75 : 1.2),
+          crossAxisSpacing: compact ? 1 : 4,
+          mainAxisSpacing: compact ? 1 : 4,
+          childAspectRatio: compact ? 3.8 : (compactPads ? 1.75 : 1.2),
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
@@ -1086,16 +1086,16 @@ final selectedFile = files.first;
               color: pad.active
                   ? pad.color.withOpacity(0.85)
                   : pad.color.withOpacity(hasAudio ? 0.20 : 0.08),
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(compact ? 5 : 9),
               border: Border.all(
                 color: pad.color,
-                width: pad.active ? 2.5 : 1,
+                width: compact ? 1 : (pad.active ? 2.5 : 1),
               ),
               boxShadow: pad.active
                   ? [
                       BoxShadow(
                         color: pad.color.withOpacity(0.5),
-                        blurRadius: 12,
+                        blurRadius: compact ? 4 : 12,
                       ),
                     ]
                   : [],
@@ -1110,7 +1110,7 @@ final selectedFile = files.first;
                         child: Text(
                           pad.name,
                           style: TextStyle(
-                            fontSize: compact ? 9 : 11,
+                            fontSize: compact ? 7 : 11,
                             fontWeight: FontWeight.bold,
                             color: pad.color,
                           ),
@@ -1133,7 +1133,7 @@ final selectedFile = files.first;
                       child: Center(
                         child: Icon(
                           hasAudio ? Icons.music_note : Icons.library_music,
-                          size: compact ? 15 : 19,
+                          size: compact ? 11 : 19,
                           color: Colors.white,
                         ),
                       ),
@@ -1141,7 +1141,7 @@ final selectedFile = files.first;
                   ),
                   SizedBox(
                     width: double.infinity,
-                    height: compact ? 15 : 23,
+                    height: compact ? 12 : 23,
                     child: ElevatedButton.icon(
                       onPressed: () => _loadAudio(index),
                       style: ElevatedButton.styleFrom(
@@ -1160,11 +1160,11 @@ final selectedFile = files.first;
                         hasAudio ? 'CAMBIAR AUDIO' : 'CARGAR AUDIO',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: compact ? 6 : 9),
+                        style: TextStyle(fontSize: compact ? 5 : 9),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: compact ? 0 : 3),
                   Text(
                     hasAudio
                         ? (pad.audioName ?? 'Audio cargado')
@@ -1172,7 +1172,7 @@ final selectedFile = files.first;
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: compact ? 6 : 9,
+                      fontSize: compact ? 5 : 9,
                       color: Colors.white70,
                     ),
                   ),
