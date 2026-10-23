@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - master
+      - sampler-perreo-windows-android
   workflow_dispatch:
 
 jobs:
