@@ -770,7 +770,7 @@ final selectedFile = files.first;
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'CONTROLES MAESTROS',
               style: TextStyle(
@@ -1123,7 +1123,7 @@ final selectedFile = files.first;
                         : 'Tecla ${pad.keyLabel} · MIDI ${pad.midiNote}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: compact ? 7 : 9,
                       color: Colors.white70,
                     ),
@@ -1197,7 +1197,7 @@ class RotaryKnob extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: compact ? 7 : 9,
                 fontWeight: FontWeight.bold,
               ),
