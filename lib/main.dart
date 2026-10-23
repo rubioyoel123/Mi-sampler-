@@ -46,7 +46,7 @@ class SamplePad {
     required this.midiNote,
   });
 
-  final String name;
+  String name;
   final String keyLabel;
   final Color color;
   int midiNote;
