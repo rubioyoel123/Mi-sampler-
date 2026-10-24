@@ -269,7 +269,7 @@ class _SamplerHomeState extends State<SamplerHome> {
         showEditor = prefs.getBool('showEditor') ?? true;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
         pianoTone = prefs.getString('pianoTone') ?? 'Piano';
-        for (int note = 48; note <= 84; note++) {
+        for (int note = 48; note <= 96; note++) {
           final path = prefs.getString('piano_note_$note');
           if (path != null) pianoAudioPaths[note] = path;
         }
@@ -309,7 +309,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       await prefs.setInt('masterVolumeCC', masterVolumeCC);
       await prefs.setDouble('masterPitch', masterPitch);
       await prefs.setString('pianoTone', pianoTone);
-      for (int note = 48; note <= 84; note++) {
+      for (int note = 48; note <= 96; note++) {
         final path = pianoAudioPaths[note];
         if (path == null) {
           await prefs.remove('piano_note_$note');
@@ -413,7 +413,7 @@ class _SamplerHomeState extends State<SamplerHome> {
         final index = pads.indexWhere((pad) => pad.midiNote == message.note);
         if (index != -1) {
           _playPad(index, velocity: message.velocity / 127.0);
-        } else if (message.note >= 48 && message.note <= 84) {
+        } else if (message.note >= 48 && message.note <= 96) {
           _playPianoNote(message.note);
         }
       });
@@ -492,21 +492,25 @@ final selectedFile = files.first;
 
       final kitFile = File(files.first.path!);
       final kit = PadKit.parse(await kitFile.readAsString());
-      final importable = kit.pads.where((pad) => pad.index >= 0 && pad.index < 64).toList()
+      final padEntries = kit.pads.where((pad) => pad.index >= 0 && pad.index < 16).toList()
         ..sort((a, b) => a.index.compareTo(b.index));
-      if (importable.isEmpty) {
-        _showStatus('El kit no contiene pads compatibles');
+      final pianoEntries = kit.pads.where((pad) => pad.index >= 16 && pad.index <= 40).toList()
+        ..sort((a, b) => a.index.compareTo(b.index));
+      if (padEntries.isEmpty && pianoEntries.isEmpty) {
+        _showStatus('El kit no contiene pads o teclas compatibles');
         return;
       }
 
+      final targetBankIndex = selectedBank;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           backgroundColor: const Color(0xFF171D29),
           title: const Text('Importar kit .padkit'),
           content: Text(
-            'Se reemplazarán los pads de los cuatro bancos. '
-            'Se importarán ${importable.length} de ${kit.pads.length} pads del kit.',
+            'Se reemplazarán los 16 pads del banco ${targetBankIndex + 1} '
+            'y las notas de piano incluidas en el kit. '
+            'Se procesarán ${padEntries.length} pads y ${pianoEntries.length} teclas.',
           ),
           actions: [
             TextButton(
@@ -522,34 +526,30 @@ final selectedFile = files.first;
       );
       if (confirmed != true) return;
 
-      for (var bankIndex = 0; bankIndex < banks.length; bankIndex++) {
-        for (var padIndex = 0; padIndex < banks[bankIndex].length; padIndex++) {
-          final pad = banks[bankIndex][padIndex];
-          if (pad.handle != null && _audioReady) {
-            audio.stop(pad.handle!);
-            pad.handle = null;
-          }
-          pad.name = 'PAD ${padIndex + 1}';
-          pad.midiNote = 36 + padIndex;
-          pad.audioPath = null;
-          pad.audioName = null;
-          pad.volume = 1.0;
-          pad.pan = 0.0;
-          pad.normGain = 1.0;
-          pad.trimSeconds = 0.0;
-          pad.volumeCC = -1;
-          pad.oneShot = true;
-          pad.active = false;
+      for (var padIndex = 0; padIndex < banks[targetBankIndex].length; padIndex++) {
+        final pad = banks[targetBankIndex][padIndex];
+        if (pad.handle != null && _audioReady) {
+          audio.stop(pad.handle!);
+          pad.handle = null;
         }
+        pad.name = 'PAD ${padIndex + 1}';
+        pad.midiNote = 36 + padIndex;
+        pad.audioPath = null;
+        pad.audioName = null;
+        pad.volume = 1.0;
+        pad.pan = 0.0;
+        pad.normGain = 1.0;
+        pad.trimSeconds = 0.0;
+        pad.volumeCC = -1;
+        pad.oneShot = true;
+        pad.active = false;
       }
 
       var loadedAudio = 0;
       var missingAudio = 0;
-      for (final kitPad in importable) {
-        final bankIndex = kitPad.index ~/ 16;
-        final padIndex = kitPad.index % 16;
-        final pad = banks[bankIndex][padIndex];
-        pad.name = kitPad.name.isEmpty ? 'PAD ${padIndex + 1}' : kitPad.name;
+      for (final kitPad in padEntries) {
+        final pad = banks[targetBankIndex][kitPad.index];
+        pad.name = kitPad.name.isEmpty ? 'PAD ${kitPad.index + 1}' : kitPad.name;
         pad.midiNote = kitPad.note;
         pad.volume = kitPad.gain.clamp(0.0, 1.0).toDouble();
         pad.pan = kitPad.pan.clamp(-1.0, 1.0).toDouble();
@@ -568,15 +568,32 @@ final selectedFile = files.first;
         loadedAudio++;
       }
 
+      for (final kitNote in pianoEntries) {
+        if (kitNote.note < 72 || kitNote.note > 96) continue;
+        final oldSource = _pianoCache.remove(kitNote.note);
+        if (oldSource != null && _audioReady) {
+          await audio.disposeSource(oldSource);
+        }
+
+        final sourcePath = await _resolveKitAudioPath(kitFile, kitNote.file);
+        if (sourcePath == null) {
+          pianoAudioPaths.remove(kitNote.note);
+          if (kitNote.file.isNotEmpty) missingAudio++;
+          continue;
+        }
+        pianoAudioPaths[kitNote.note] = await _copyAudioToLibrary(sourcePath);
+        loadedAudio++;
+      }
+
       masterVolume = kit.masterGain.clamp(0.0, 1.0).toDouble();
       masterVolumeCC = kit.masterCC;
-      selectedBank = 0;
       await _saveSettings();
       if (mounted) setState(() {});
       _showStatus(
-        'Kit importado: ${importable.length} pads, $loadedAudio audios cargados'
+        'Kit importado: ${padEntries.length} pads y ${pianoEntries.length} teclas; '
+        '$loadedAudio audios cargados'
         '${missingAudio > 0 ? ', $missingAudio audios no encontrados' : ''}'
-        '${kit.pads.length > 64 ? ' · se omitieron pads fuera del rango 1–64' : ''}',
+        '${kit.pads.length > padEntries.length + pianoEntries.length ? ' · se omitieron elementos fuera del rango compatible' : ''}',
       );
     } catch (e) {
       _showStatus('No se pudo importar el kit .padkit: $e');
@@ -597,14 +614,35 @@ final selectedFile = files.first;
     if (!isAbsolute) {
       candidates.add('${kitFile.parent.path}${Platform.pathSeparator}$normalized');
     }
-    final fileName = reference.replaceAll(r'\', '/').split('/').last;
-    if (fileName.isNotEmpty) {
-      candidates.add('${kitFile.parent.path}${Platform.pathSeparator}$fileName');
+
+    final sourceSegments = reference.replaceAll(r'\', '/').split('/')
+        .where((segment) => segment.isNotEmpty).toList();
+    final kitFolderName = kitFile.parent.path.replaceAll(r'\', '/').split('/').last;
+    final kitFolderIndex = sourceSegments.lastIndexWhere(
+      (segment) => segment.toLowerCase() == kitFolderName.toLowerCase(),
+    );
+    if (kitFolderIndex >= 0 && kitFolderIndex < sourceSegments.length - 1) {
+      candidates.add([
+        kitFile.parent.path,
+        ...sourceSegments.skip(kitFolderIndex + 1),
+      ].join(Platform.pathSeparator));
     }
 
+    final fileName = sourceSegments.isEmpty ? '' : sourceSegments.last;
     for (final candidate in candidates) {
       final file = File(candidate);
       if (await file.exists()) return file.path;
+    }
+
+    if (fileName.isNotEmpty) {
+      await for (final entity in Directory(kitFile.parent.path)
+          .list(recursive: true, followLinks: false)) {
+        if (entity is File &&
+            entity.path.replaceAll(r'\', '/').split('/').last.toLowerCase() ==
+                fileName.toLowerCase()) {
+          return entity.path;
+        }
+      }
     }
     return null;
   }
@@ -1208,7 +1246,7 @@ final selectedFile = files.first;
             onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } }),
         ])),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(25, (i) {
-          final note = 60 + i;
+          final note = 72 + i;
           final isBlack = const [1, 3, 6, 8, 10].contains(note % 12);
           final custom = pianoAudioPaths.containsKey(note);
           return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: Tooltip(
