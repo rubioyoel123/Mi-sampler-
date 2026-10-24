@@ -225,6 +225,9 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   double masterVolume = 0.8;
   int masterVolumeCC = -1;
+  int velocityCurve = 0;
+  SamplePad? _learningNotePad;
+  SamplePad? _learningVolumePad;
   double masterPitch = 1.0;
   int selectedBank = 0;
   String status = 'Listo para mezclar';
@@ -262,6 +265,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       setState(() {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
         masterVolumeCC = prefs.getInt('masterVolumeCC') ?? -1;
+        velocityCurve = (prefs.getInt('velocityCurve') ?? 0).clamp(0, 2);
         uiThemeName = prefs.getString('uiThemeName') ?? 'Neón';
         const savedThemes = {'Neón': Colors.cyanAccent, 'Morado': Colors.purpleAccent, 'Azul': Colors.lightBlueAccent, 'Verde': Colors.greenAccent, 'Rojo': Colors.redAccent, 'Naranja': Colors.orangeAccent, 'Rosa': Colors.pinkAccent, 'Dorado': Colors.amberAccent};
         uiAccent = savedThemes[uiThemeName] ?? Colors.cyanAccent;
@@ -307,6 +311,7 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       await prefs.setDouble('masterVolume', masterVolume);
       await prefs.setInt('masterVolumeCC', masterVolumeCC);
+      await prefs.setInt('velocityCurve', velocityCurve);
       await prefs.setDouble('masterPitch', masterPitch);
       await prefs.setString('pianoTone', pianoTone);
       for (int note = 48; note <= 96; note++) {
@@ -387,6 +392,16 @@ class _SamplerHomeState extends State<SamplerHome> {
         final message = event.message;
 
         if (message is CCMessage) {
+          final learningPad = _learningVolumePad;
+          if (learningPad != null) {
+            learningPad.volumeCC = message.controller;
+            _learningVolumePad = null;
+            if (mounted) setState(() {});
+            _saveSettings();
+            _showStatus('CC ${message.controller} asignado al volumen de ${learningPad.name}');
+            return;
+          }
+
           final value = (message.value / 127.0).clamp(0.0, 1.0).toDouble();
           var changed = false;
           if (masterVolumeCC == message.controller) {
@@ -410,11 +425,22 @@ class _SamplerHomeState extends State<SamplerHome> {
           return;
         }
 
+        final learningPad = _learningNotePad;
+        if (learningPad != null) {
+          learningPad.midiNote = message.note;
+          _learningNotePad = null;
+          if (mounted) setState(() {});
+          _saveSettings();
+          _showStatus('Nota MIDI ${message.note} asignada a ${learningPad.name}');
+          return;
+        }
+
+        final velocity = _applyVelocityCurve(message.velocity / 127.0);
         final index = pads.indexWhere((pad) => pad.midiNote == message.note);
         if (index != -1) {
-          _playPad(index, velocity: message.velocity / 127.0);
+          _playPad(index, velocity: velocity);
         } else if (message.note >= 48 && message.note <= 96) {
-          _playPianoNote(message.note);
+          _playPianoNote(message.note, velocity: velocity);
         }
       });
 
@@ -433,6 +459,40 @@ class _SamplerHomeState extends State<SamplerHome> {
   void _showStatus(String message) {
     if (!mounted) return;
     setState(() => status = message);
+  }
+
+  void _startPadNoteLearn(SamplePad pad) {
+    final cancel = identical(_learningNotePad, pad);
+    setState(() {
+      _learningNotePad = cancel ? null : pad;
+      if (!cancel) _learningVolumePad = null;
+    });
+    _showStatus(cancel
+        ? 'MIDI Learn cancelado'
+        : 'Toca una nota MIDI para asignarla a ${pad.name}');
+  }
+
+  void _startPadVolumeLearn(SamplePad pad) {
+    final cancel = identical(_learningVolumePad, pad);
+    setState(() {
+      _learningVolumePad = cancel ? null : pad;
+      if (!cancel) _learningNotePad = null;
+    });
+    _showStatus(cancel
+        ? 'MIDI Learn cancelado'
+        : 'Mueve el control MIDI que regulará el volumen de ${pad.name}');
+  }
+
+  double _applyVelocityCurve(double velocity) {
+    final value = velocity.clamp(0.0, 1.0).toDouble();
+    switch (velocityCurve) {
+      case 1:
+        return math.sqrt(value);
+      case 2:
+        return value * value;
+      default:
+        return value;
+    }
   }
 
   Future<String> _copyAudioToLibrary(String sourcePath) async {
@@ -587,6 +647,7 @@ final selectedFile = files.first;
 
       masterVolume = kit.masterGain.clamp(0.0, 1.0).toDouble();
       masterVolumeCC = kit.masterCC;
+      velocityCurve = kit.velocityCurve.clamp(0, 2);
       await _saveSettings();
       if (mounted) setState(() {});
       _showStatus(
@@ -651,7 +712,7 @@ final selectedFile = files.first;
     final pad = pads[index];
 
     if (pad.audioPath == null) {
-      await _playBundledSample(index);
+      await _playBundledSample(index, velocity: velocity);
       return;
     }
 
@@ -700,7 +761,7 @@ final selectedFile = files.first;
     }
   }
 
-  Future<void> _playBundledSample(int index) async {
+  Future<void> _playBundledSample(int index, {double velocity = 1.0}) async {
     if (!_audioReady) {
       _showStatus('El motor de audio todavía está iniciando');
       return;
@@ -738,8 +799,16 @@ final selectedFile = files.first;
         _sk5Cache[assetPath] = source;
       }
       final pad = pads[index];
-      final handle = audio.play(source, volume: (masterVolume * pad.volume).clamp(0.0, 1.0));
+      final handle = audio.play(
+        source,
+        volume: (masterVolume * pad.volume * pad.normGain * velocity).clamp(0.0, 1.0),
+        pan: pad.pan.clamp(-1.0, 1.0),
+        looping: !pad.oneShot,
+      );
       pad.handle = handle;
+      if (pad.trimSeconds > 0) {
+        audio.seek(handle, Duration(milliseconds: (pad.trimSeconds * 1000).round()));
+      }
       audio.setRelativePlaySpeed(handle, (masterPitch * pad.pitch).clamp(0.5, 2.0));
       if (mounted) setState(() => pad.active = true);
       _showStatus('$bankName · ${sample.replaceAll('.wav', '').replaceAll('-', ' ').toUpperCase()} · PAD ${index + 1}');
@@ -797,7 +866,7 @@ final selectedFile = files.first;
     return bytes.buffer.asUint8List();
   }
 
-  Future<void> _playPianoNote(int note) async {
+  Future<void> _playPianoNote(int note, {double velocity = 1.0}) async {
     if (!_audioReady) {
       _showStatus('El motor de audio todavía está iniciando');
       return;
@@ -817,7 +886,10 @@ final selectedFile = files.first;
         }
         _pianoCache[note] = source;
       }
-      audio.play(source, volume: masterVolume);
+      audio.play(
+        source,
+        volume: (masterVolume * velocity).clamp(0.0, 1.0),
+      );
       _showStatus('${pianoTone.toUpperCase()} · nota MIDI $note');
     } catch (e) {
       _showStatus('No se pudo reproducir la nota: $e');
@@ -950,7 +1022,7 @@ final selectedFile = files.first;
                   title: Text('Cargar audio al pad seleccionado'))),
                 PopupMenuItem(value: 'kit', child: ListTile(
                   dense: true, leading: Icon(Icons.library_add, color: Colors.cyanAccent),
-                  title: Text('Importar kit .padkit a los cuatro bancos'))),
+                  title: Text('Importar kit .padkit al banco seleccionado y al piano'))),
                 PopupMenuItem(value: 'piano', child: ListTile(
                   dense: true, leading: Icon(Icons.piano, color: Colors.cyanAccent),
                   title: Text('Mostrar / ocultar piano'))),
@@ -1203,7 +1275,55 @@ final selectedFile = files.first;
               child: Text('PAD ${i + 1}', style: const TextStyle(fontSize: 10)))),
             onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); }),
         ]),
-        const SizedBox(height: 5),
+        Row(children: [
+          const Text('RESPUESTA', style: TextStyle(color: Colors.cyanAccent, fontSize: 9)),
+          const SizedBox(width: 5),
+          Expanded(
+            child: DropdownButton<int>(
+              value: velocityCurve,
+              isDense: true,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF20202B),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Lineal')),
+                DropdownMenuItem(value: 1, child: Text('Suave')),
+                DropdownMenuItem(value: 2, child: Text('Fuerte')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => velocityCurve = value);
+                _saveSettings();
+              },
+            ),
+          ),
+          IconButton(
+            tooltip: identical(_learningNotePad, pad)
+                ? 'Cancelar MIDI Learn de nota'
+                : 'MIDI Learn: asignar nota al pad',
+            onPressed: () => _startPadNoteLearn(pad),
+            icon: Icon(
+              identical(_learningNotePad, pad) ? Icons.hearing : Icons.piano,
+              size: 18,
+              color: identical(_learningNotePad, pad) ? Colors.orangeAccent : Colors.cyanAccent,
+            ),
+          ),
+          IconButton(
+            tooltip: identical(_learningVolumePad, pad)
+                ? 'Cancelar MIDI Learn de volumen'
+                : 'MIDI Learn: asignar CC de volumen',
+            onPressed: () => _startPadVolumeLearn(pad),
+            icon: Icon(
+              identical(_learningVolumePad, pad) ? Icons.hearing : Icons.tune,
+              size: 18,
+              color: identical(_learningVolumePad, pad) ? Colors.orangeAccent : Colors.cyanAccent,
+            ),
+          ),
+          Text('N ${pad.midiNote}', style: const TextStyle(fontSize: 9, color: Colors.white70)),
+          const SizedBox(width: 4),
+          Text('CC ${pad.volumeCC < 0 ? '—' : pad.volumeCC}',
+              style: const TextStyle(fontSize: 9, color: Colors.white70)),
+        ]),
+        const SizedBox(height: 4),
         Expanded(child: Container(decoration: BoxDecoration(color: const Color(0xFF08080D),
           border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(6)),
           child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
