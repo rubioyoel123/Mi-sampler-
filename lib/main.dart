@@ -11,6 +11,9 @@ import 'package:flutter_midi_command/flutter_midi_command.dart';
 import 'package:flutter_midi_command/flutter_midi_command_messages.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xml/xml.dart';
+
+import 'padkit.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,15 +48,20 @@ class SamplePad {
     required this.midiNote,
   });
 
-  final String name;
+  String name;
   final String keyLabel;
   final Color color;
-  final int midiNote;
+  int midiNote;
 
   String? audioPath;
   String? audioName;
   double volume = 1.0;
   double pitch = 1.0;
+  double pan = 0.0;
+  double normGain = 1.0;
+  double trimSeconds = 0.0;
+  int volumeCC = -1;
+  bool oneShot = true;
   bool active = false;
   SoundHandle? handle;
 }
@@ -84,23 +92,28 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool echoEnabled = false;
   bool reverbEnabled = false;
   bool flangerEnabled = false;
+  bool _echoFilterApplied = false;
+  bool _reverbFilterApplied = false;
+  bool _flangerFilterApplied = false;
   bool showPiano = true;
-  Color uiAccent = Colors.cyanAccent;
+  Color uiAccent = Colors.blueGrey.shade200;
   Color uiBackground = const Color(0xFF101016);
-  String uiThemeName = 'Neón';
+  String uiThemeName = 'Grafito';
   bool compactPads = true;
   bool showEditor = true;
+  bool setupMode = false;
+  int midiMapBase = 48;
 
   Future<void> _openSettings() async {
     const themes = <String, Color>{
-      'Neón': Colors.cyanAccent,
-      'Morado': Colors.purpleAccent,
-      'Azul': Colors.lightBlueAccent,
-      'Verde': Colors.greenAccent,
-      'Rojo': Colors.redAccent,
-      'Naranja': Colors.orangeAccent,
-      'Rosa': Colors.pinkAccent,
-      'Dorado': Colors.amberAccent,
+      'Ámbar': Colors.amberAccent,
+      'Azul hielo': Colors.lightBlueAccent,
+      'Verde neón': Colors.greenAccent,
+      'Magenta': Colors.pinkAccent,
+      'Púrpura': Colors.purpleAccent,
+      'Rojo fuego': Colors.redAccent,
+      'Cian': Colors.cyanAccent,
+      'Grafito': Colors.blueGrey,
     };
     String draftTheme = uiThemeName;
     bool draftCompact = compactPads;
@@ -216,6 +229,10 @@ class _SamplerHomeState extends State<SamplerHome> {
   StreamSubscription<MidiDataReceivedEvent>? midiSubscription;
 
   double masterVolume = 0.8;
+  int masterVolumeCC = -1;
+  int velocityCurve = 0;
+  SamplePad? _learningNotePad;
+  SamplePad? _learningVolumePad;
   double masterPitch = 1.0;
   int selectedBank = 0;
   String status = 'Listo para mezclar';
@@ -252,14 +269,16 @@ class _SamplerHomeState extends State<SamplerHome> {
 
       setState(() {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
+        masterVolumeCC = prefs.getInt('masterVolumeCC') ?? -1;
+        velocityCurve = (prefs.getInt('velocityCurve') ?? 0).clamp(0, 2);
         uiThemeName = prefs.getString('uiThemeName') ?? 'Neón';
-        const savedThemes = {'Neón': Colors.cyanAccent, 'Morado': Colors.purpleAccent, 'Azul': Colors.lightBlueAccent, 'Verde': Colors.greenAccent, 'Rojo': Colors.redAccent, 'Naranja': Colors.orangeAccent, 'Rosa': Colors.pinkAccent, 'Dorado': Colors.amberAccent};
+        const savedThemes = {'Neón': Colors.cyanAccent, 'Morado': Colors.purpleAccent, 'Azul': Colors.lightBlueAccent, 'Verde': Colors.greenAccent, 'Rojo': Colors.redAccent, 'Naranja': Colors.orangeAccent, 'Rosa': Colors.pinkAccent, 'Dorado': Colors.amberAccent, 'Ámbar': Colors.amberAccent, 'Azul hielo': Colors.lightBlueAccent, 'Verde neón': Colors.greenAccent, 'Magenta': Colors.pinkAccent, 'Púrpura': Colors.purpleAccent, 'Rojo fuego': Colors.redAccent, 'Cian': Colors.cyanAccent, 'Grafito': Colors.blueGrey};
         uiAccent = savedThemes[uiThemeName] ?? Colors.cyanAccent;
         compactPads = prefs.getBool('compactPads') ?? true;
         showEditor = prefs.getBool('showEditor') ?? true;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
         pianoTone = prefs.getString('pianoTone') ?? 'Piano';
-        for (int note = 48; note <= 84; note++) {
+        for (int note = 48; note <= 96; note++) {
           final path = prefs.getString('piano_note_$note');
           if (path != null) pianoAudioPaths[note] = path;
         }
@@ -276,6 +295,13 @@ class _SamplerHomeState extends State<SamplerHome> {
             pad.audioName = prefs.getString('${key}_name');
             pad.volume = prefs.getDouble('${key}_volume') ?? 1.0;
             pad.pitch = prefs.getDouble('${key}_pitch') ?? 1.0;
+            pad.name = prefs.getString('${key}_label') ?? pad.name;
+            pad.midiNote = prefs.getInt('${key}_note') ?? pad.midiNote;
+            pad.pan = prefs.getDouble('${key}_pan') ?? 0.0;
+            pad.normGain = prefs.getDouble('${key}_norm_gain') ?? 1.0;
+            pad.trimSeconds = prefs.getDouble('${key}_trim_seconds') ?? 0.0;
+            pad.volumeCC = prefs.getInt('${key}_volume_cc') ?? -1;
+            pad.oneShot = prefs.getBool('${key}_one_shot') ?? true;
           }
         }
       });
@@ -289,9 +315,11 @@ class _SamplerHomeState extends State<SamplerHome> {
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.setDouble('masterVolume', masterVolume);
+      await prefs.setInt('masterVolumeCC', masterVolumeCC);
+      await prefs.setInt('velocityCurve', velocityCurve);
       await prefs.setDouble('masterPitch', masterPitch);
       await prefs.setString('pianoTone', pianoTone);
-      for (int note = 48; note <= 84; note++) {
+      for (int note = 48; note <= 96; note++) {
         final path = pianoAudioPaths[note];
         if (path == null) {
           await prefs.remove('piano_note_$note');
@@ -320,6 +348,13 @@ class _SamplerHomeState extends State<SamplerHome> {
           }
           await prefs.setDouble('${key}_volume', pad.volume);
           await prefs.setDouble('${key}_pitch', pad.pitch);
+          await prefs.setString('${key}_label', pad.name);
+          await prefs.setInt('${key}_note', pad.midiNote);
+          await prefs.setDouble('${key}_pan', pad.pan);
+          await prefs.setDouble('${key}_norm_gain', pad.normGain);
+          await prefs.setDouble('${key}_trim_seconds', pad.trimSeconds);
+          await prefs.setInt('${key}_volume_cc', pad.volumeCC);
+          await prefs.setBool('${key}_one_shot', pad.oneShot);
         }
       }
     } catch (e) {
@@ -345,13 +380,41 @@ class _SamplerHomeState extends State<SamplerHome> {
   void _applyEffects() {
     if (!_audioReady) return;
     final filters = audio.filters;
-    filters.echoFilter.delay.value = echoDelay;
-    filters.echoFilter.decay.value = echoDecay;
-    if (echoEnabled) { filters.echoFilter.activate(); } else { filters.echoFilter.deactivate(); }
-    filters.freeverbFilter.roomSize.value = reverbRoom;
-    filters.freeverbFilter.damp.value = reverbDamp;
-    if (reverbEnabled) { filters.freeverbFilter.activate(); } else { filters.freeverbFilter.deactivate(); }
-    if (flangerEnabled && flangerAmount > 0.01) { filters.flangerFilter.activate(); } else { filters.flangerFilter.deactivate(); }
+
+    if (echoEnabled) {
+      filters.echoFilter
+        ..delay.value = echoDelay
+        ..decay.value = echoDecay;
+      if (!_echoFilterApplied) {
+        filters.echoFilter.activate();
+        _echoFilterApplied = true;
+      }
+    } else if (_echoFilterApplied) {
+      filters.echoFilter.deactivate();
+      _echoFilterApplied = false;
+    }
+
+    if (reverbEnabled) {
+      filters.freeverbFilter
+        ..roomSize.value = reverbRoom
+        ..damp.value = reverbDamp;
+      if (!_reverbFilterApplied) {
+        filters.freeverbFilter.activate();
+        _reverbFilterApplied = true;
+      }
+    } else if (_reverbFilterApplied) {
+      filters.freeverbFilter.deactivate();
+      _reverbFilterApplied = false;
+    }
+
+    final shouldApplyFlanger = flangerEnabled && flangerAmount > 0.01;
+    if (shouldApplyFlanger && !_flangerFilterApplied) {
+      filters.flangerFilter.activate();
+      _flangerFilterApplied = true;
+    } else if (!shouldApplyFlanger && _flangerFilterApplied) {
+      filters.flangerFilter.deactivate();
+      _flangerFilterApplied = false;
+    }
   }
 
   Future<void> _initMidi() async {
@@ -361,15 +424,56 @@ class _SamplerHomeState extends State<SamplerHome> {
       midiSubscription = midi.onMidiDataReceived?.listen((event) {
         final message = event.message;
 
+        if (message is CCMessage) {
+          final learningPad = _learningVolumePad;
+          if (learningPad != null) {
+            learningPad.volumeCC = message.controller;
+            _learningVolumePad = null;
+            if (mounted) setState(() {});
+            _saveSettings();
+            _showStatus('CC ${message.controller} asignado al volumen de ${learningPad.name}');
+            return;
+          }
+
+          final value = (message.value / 127.0).clamp(0.0, 1.0).toDouble();
+          var changed = false;
+          if (masterVolumeCC == message.controller) {
+            masterVolume = value;
+            changed = true;
+          }
+          for (final pad in banks.expand((bank) => bank)) {
+            if (pad.volumeCC == message.controller) {
+              pad.volume = value;
+              changed = true;
+            }
+          }
+          if (changed) {
+            if (mounted) setState(() {});
+            _saveSettings();
+          }
+          return;
+        }
+
         if (message is! NoteOnMessage || message.velocity <= 0) {
           return;
         }
 
+        final learningPad = _learningNotePad;
+        if (learningPad != null) {
+          learningPad.midiNote = message.note;
+          _learningNotePad = null;
+          if (mounted) setState(() {});
+          _saveSettings();
+          _showStatus('Nota MIDI ${message.note} asignada a ${learningPad.name}');
+          return;
+        }
+
+        final velocity = _applyVelocityCurve(message.velocity / 127.0);
         final index = pads.indexWhere((pad) => pad.midiNote == message.note);
         if (index != -1) {
-          _playPad(index);
-        } else if (message.note >= 48 && message.note <= 84) {
-          _playPianoNote(message.note);
+          _playPad(index, velocity: velocity);
+        } else if (message.note >= 48 && message.note <= 96) {
+          _playPianoNote(message.note, velocity: velocity);
         }
       });
 
@@ -388,6 +492,40 @@ class _SamplerHomeState extends State<SamplerHome> {
   void _showStatus(String message) {
     if (!mounted) return;
     setState(() => status = message);
+  }
+
+  void _startPadNoteLearn(SamplePad pad) {
+    final cancel = identical(_learningNotePad, pad);
+    setState(() {
+      _learningNotePad = cancel ? null : pad;
+      if (!cancel) _learningVolumePad = null;
+    });
+    _showStatus(cancel
+        ? 'MIDI Learn cancelado'
+        : 'Toca una nota MIDI para asignarla a ${pad.name}');
+  }
+
+  void _startPadVolumeLearn(SamplePad pad) {
+    final cancel = identical(_learningVolumePad, pad);
+    setState(() {
+      _learningVolumePad = cancel ? null : pad;
+      if (!cancel) _learningNotePad = null;
+    });
+    _showStatus(cancel
+        ? 'MIDI Learn cancelado'
+        : 'Mueve el control MIDI que regulará el volumen de ${pad.name}');
+  }
+
+  double _applyVelocityCurve(double velocity) {
+    final value = velocity.clamp(0.0, 1.0).toDouble();
+    switch (velocityCurve) {
+      case 1:
+        return math.sqrt(value);
+      case 2:
+        return value * value;
+      default:
+        return value;
+    }
   }
 
   Future<String> _copyAudioToLibrary(String sourcePath) async {
@@ -434,11 +572,194 @@ final selectedFile = files.first;
     }
   }
 
-  Future<void> _playPad(int index) async {
+  Future<void> _importPadKit() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['padkit'],
+      );
+      if (files.isEmpty || files.first.path == null) {
+        _showStatus('No seleccionaste ningún kit');
+        return;
+      }
+
+      final kitFile = File(files.first.path!);
+      final kit = PadKit.parse(await kitFile.readAsString());
+      final isJrProdNumberedKit =
+          kitFile.uri.pathSegments.last.toLowerCase() ==
+              'kit jr d55 dd14 sk5.padkit';
+      final padEntries = kit.pads.where((pad) => pad.index >= 0 && pad.index < 16).toList()
+        ..sort((a, b) => a.index.compareTo(b.index));
+      final pianoEntries = kit.pads.where((pad) => pad.index >= 16 && pad.index <= 40).toList()
+        ..sort((a, b) => a.index.compareTo(b.index));
+      if (padEntries.isEmpty && pianoEntries.isEmpty) {
+        _showStatus('El kit no contiene pads o teclas compatibles');
+        return;
+      }
+
+      final targetBankIndex = selectedBank;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: const Color(0xFF171D29),
+          title: const Text('Importar kit .padkit'),
+          content: Text(
+            'Se reemplazarán los 16 pads del banco ${targetBankIndex + 1} '
+            'y las notas de piano incluidas en el kit. '
+            'Se procesarán ${padEntries.length} pads y ${pianoEntries.length} teclas.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('CANCELAR'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('IMPORTAR'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+
+      for (var padIndex = 0; padIndex < banks[targetBankIndex].length; padIndex++) {
+        final pad = banks[targetBankIndex][padIndex];
+        if (pad.handle != null && _audioReady) {
+          audio.stop(pad.handle!);
+          pad.handle = null;
+        }
+        pad.name = 'PAD ${padIndex + 1}';
+        pad.midiNote = 36 + padIndex;
+        pad.audioPath = null;
+        pad.audioName = null;
+        pad.volume = 1.0;
+        pad.pan = 0.0;
+        pad.normGain = 1.0;
+        pad.trimSeconds = 0.0;
+        pad.volumeCC = -1;
+        pad.oneShot = true;
+        pad.active = false;
+      }
+
+      var loadedAudio = 0;
+      var missingAudio = 0;
+      for (final kitPad in padEntries) {
+        final pad = banks[targetBankIndex][kitPad.index];
+        pad.name = isJrProdNumberedKit
+            ? 'PAD ${kitPad.index + 1}'
+            : (kitPad.name.isEmpty ? 'PAD ${kitPad.index + 1}' : kitPad.name);
+        pad.midiNote = kitPad.note;
+        pad.volume = kitPad.gain.clamp(0.0, 1.0).toDouble();
+        pad.pan = kitPad.pan.clamp(-1.0, 1.0).toDouble();
+        pad.normGain = kitPad.normGain.clamp(0.0, 4.0).toDouble();
+        pad.trimSeconds = kitPad.trimSeconds;
+        pad.volumeCC = kitPad.volumeCC;
+        pad.oneShot = kitPad.oneShot;
+
+        final numberedSampleName = kitPad.index == 7
+            ? '8-2.wav'
+            : kitPad.index == 15
+                ? '8-3.wav'
+                : '${kitPad.index + 1}.wav';
+        final numberedPath = isJrProdNumberedKit
+            ? await _resolveKitAudioPath(kitFile, numberedSampleName)
+            : null;
+        final sourcePath = numberedPath ??
+            await _resolveKitAudioPath(kitFile, kitPad.file);
+        if (sourcePath == null) {
+          if (kitPad.file.isNotEmpty || isJrProdNumberedKit) missingAudio++;
+          continue;
+        }
+        pad.audioPath = await _copyAudioToLibrary(sourcePath);
+        pad.audioName = File(sourcePath).uri.pathSegments.last;
+        loadedAudio++;
+      }
+
+      for (final kitNote in pianoEntries) {
+        if (kitNote.note < 72 || kitNote.note > 96) continue;
+        final oldSource = _pianoCache.remove(kitNote.note);
+        if (oldSource != null && _audioReady) {
+          await audio.disposeSource(oldSource);
+        }
+
+        final sourcePath = await _resolveKitAudioPath(kitFile, kitNote.file);
+        if (sourcePath == null) {
+          pianoAudioPaths.remove(kitNote.note);
+          if (kitNote.file.isNotEmpty) missingAudio++;
+          continue;
+        }
+        pianoAudioPaths[kitNote.note] = await _copyAudioToLibrary(sourcePath);
+        loadedAudio++;
+      }
+
+      masterVolume = kit.masterGain.clamp(0.0, 1.0).toDouble();
+      masterVolumeCC = kit.masterCC;
+      velocityCurve = kit.velocityCurve.clamp(0, 2);
+      await _saveSettings();
+      if (mounted) setState(() {});
+      _showStatus(
+        'Kit importado: ${padEntries.length} pads y ${pianoEntries.length} teclas; '
+        '$loadedAudio audios cargados'
+        '${missingAudio > 0 ? ', $missingAudio audios no encontrados' : ''}'
+        '${kit.pads.length > padEntries.length + pianoEntries.length ? ' · se omitieron elementos fuera del rango compatible' : ''}',
+      );
+    } catch (e) {
+      _showStatus('No se pudo importar el kit .padkit: $e');
+    }
+  }
+
+  Future<String?> _resolveKitAudioPath(File kitFile, String reference) async {
+    if (reference.trim().isEmpty) return null;
+    final isWindowsAbsolute = reference.length >= 3 &&
+        reference[1] == ':' &&
+        (reference[2] == r'\' || reference[2] == '/');
+    final isAbsolute = isWindowsAbsolute || reference.startsWith(r'\\') || reference.startsWith('/');
+    final normalized = reference
+        .replaceAll(r'\', Platform.pathSeparator)
+        .replaceAll('/', Platform.pathSeparator);
+    final candidates = <String>[];
+    if (isAbsolute) candidates.add(reference);
+    if (!isAbsolute) {
+      candidates.add('${kitFile.parent.path}${Platform.pathSeparator}$normalized');
+    }
+
+    final sourceSegments = reference.replaceAll(r'\', '/').split('/')
+        .where((segment) => segment.isNotEmpty).toList();
+    final kitFolderName = kitFile.parent.path.replaceAll(r'\', '/').split('/').last;
+    final kitFolderIndex = sourceSegments.lastIndexWhere(
+      (segment) => segment.toLowerCase() == kitFolderName.toLowerCase(),
+    );
+    if (kitFolderIndex >= 0 && kitFolderIndex < sourceSegments.length - 1) {
+      candidates.add([
+        kitFile.parent.path,
+        ...sourceSegments.skip(kitFolderIndex + 1),
+      ].join(Platform.pathSeparator));
+    }
+
+    final fileName = sourceSegments.isEmpty ? '' : sourceSegments.last;
+    for (final candidate in candidates) {
+      final file = File(candidate);
+      if (await file.exists()) return file.path;
+    }
+
+    if (fileName.isNotEmpty) {
+      await for (final entity in Directory(kitFile.parent.path)
+          .list(recursive: true, followLinks: false)) {
+        if (entity is File &&
+            entity.path.replaceAll(r'\', '/').split('/').last.toLowerCase() ==
+                fileName.toLowerCase()) {
+          return entity.path;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _playPad(int index, {double velocity = 1.0}) async {
     final pad = pads[index];
 
     if (pad.audioPath == null) {
-      await _playBundledSample(index);
+      await _playBundledSample(index, velocity: velocity);
       return;
     }
 
@@ -454,9 +775,14 @@ final selectedFile = files.first;
       }
       final handle = audio.play(
         source,
-        volume: (masterVolume * pad.volume).clamp(0.0, 1.0),
+        volume: (masterVolume * pad.volume * pad.normGain * velocity).clamp(0.0, 1.0),
+        pan: pad.pan.clamp(-1.0, 1.0),
+        looping: !pad.oneShot,
       );
       pad.handle = handle;
+      if (pad.trimSeconds > 0) {
+        audio.seek(handle, Duration(milliseconds: (pad.trimSeconds * 1000).round()));
+      }
       audio.setRelativePlaySpeed(
         handle,
         (masterPitch * pad.pitch).clamp(0.5, 2.0),
@@ -472,6 +798,8 @@ final selectedFile = files.first;
   }
 
   String _padLabel(int index) {
+    final importedName = pads[index].name;
+    if (importedName != 'PAD ${index + 1}') return importedName;
     switch (selectedBank) {
       case 0: return _champetaPadLabels[index % _champetaPadLabels.length];
       case 1: return _dembowPadLabels[index % _dembowPadLabels.length];
@@ -480,7 +808,7 @@ final selectedFile = files.first;
     }
   }
 
-  Future<void> _playBundledSample(int index) async {
+  Future<void> _playBundledSample(int index, {double velocity = 1.0}) async {
     if (!_audioReady) {
       _showStatus('El motor de audio todavía está iniciando');
       return;
@@ -518,8 +846,16 @@ final selectedFile = files.first;
         _sk5Cache[assetPath] = source;
       }
       final pad = pads[index];
-      final handle = audio.play(source, volume: (masterVolume * pad.volume).clamp(0.0, 1.0));
+      final handle = audio.play(
+        source,
+        volume: (masterVolume * pad.volume * pad.normGain * velocity).clamp(0.0, 1.0),
+        pan: pad.pan.clamp(-1.0, 1.0),
+        looping: !pad.oneShot,
+      );
       pad.handle = handle;
+      if (pad.trimSeconds > 0) {
+        audio.seek(handle, Duration(milliseconds: (pad.trimSeconds * 1000).round()));
+      }
       audio.setRelativePlaySpeed(handle, (masterPitch * pad.pitch).clamp(0.5, 2.0));
       if (mounted) setState(() => pad.active = true);
       _showStatus('$bankName · ${sample.replaceAll('.wav', '').replaceAll('-', ' ').toUpperCase()} · PAD ${index + 1}');
@@ -577,7 +913,7 @@ final selectedFile = files.first;
     return bytes.buffer.asUint8List();
   }
 
-  Future<void> _playPianoNote(int note) async {
+  Future<void> _playPianoNote(int note, {double velocity = 1.0}) async {
     if (!_audioReady) {
       _showStatus('El motor de audio todavía está iniciando');
       return;
@@ -597,7 +933,10 @@ final selectedFile = files.first;
         }
         _pianoCache[note] = source;
       }
-      audio.play(source, volume: masterVolume);
+      audio.play(
+        source,
+        volume: (masterVolume * velocity).clamp(0.0, 1.0),
+      );
       _showStatus('${pianoTone.toUpperCase()} · nota MIDI $note');
     } catch (e) {
       _showStatus('No se pudo reproducir la nota: $e');
@@ -669,133 +1008,189 @@ final selectedFile = files.first;
   @override
   Widget build(BuildContext context) {
     return RawKeyboardListener(
-      focusNode: keyboardFocus,
-      autofocus: true,
-      onKey: _handleKey,
+      focusNode: keyboardFocus, autofocus: true, onKey: _handleKey,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'SAMPLER PERREO',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
-          ),
-          backgroundColor: const Color(0xFF191923),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8, top: 4),
-              child: Center(
-                child: Text(
-                  'DJ DANNYS YOEL',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.28),
-                    fontSize: 7,
-                    letterSpacing: 0.5,
-                    fontWeight: FontWeight.w400,
-                  ),
+        backgroundColor: const Color(0xFF101216),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(66),
+          child: Material(
+            color: const Color(0xFF252B31),
+            child: Column(children: [
+              SizedBox(height: 28, child: Row(children: [
+                TextButton(
+                  onPressed: _openSettings,
+                  style: TextButton.styleFrom(foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  child: const Text('OPCIONES', style: TextStyle(fontSize: 10)),
                 ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Detener todos los audios',
-              onPressed: _stopAll,
-              icon: const Icon(
-                Icons.stop_circle,
-                color: Colors.redAccent,
-              ),
-            ),
-            PopupMenuButton<String>(
-              tooltip: 'Menú de Sampler Perreo',
-              color: const Color(0xFF171D29),
-              icon: const Icon(Icons.menu, color: Colors.cyanAccent),
-              onSelected: (choice) {
-                if (choice == 'settings') _openSettings();
-                if (choice == 'save') _saveSettings();
-                if (choice == 'stop') _stopAll();
-                if (choice == 'piano') setState(() => showPiano = !showPiano);
-                if (choice == 'load') _loadAudio(editorPadIndex);
-                if (choice == 'midi') _showMidiDevices();
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'settings', child: ListTile(
-                  dense: true, leading: Icon(Icons.tune, color: Colors.cyanAccent),
-                  title: Text('Apariencia y opciones'))),
-                PopupMenuItem(value: 'save', child: ListTile(
-                  dense: true, leading: Icon(Icons.save, color: Colors.cyanAccent),
-                  title: Text('Guardar ajustes'))),
-                PopupMenuItem(value: 'load', child: ListTile(
-                  dense: true, leading: Icon(Icons.audio_file, color: Colors.cyanAccent),
-                  title: Text('Cargar audio al pad seleccionado'))),
-                PopupMenuItem(value: 'piano', child: ListTile(
-                  dense: true, leading: Icon(Icons.piano, color: Colors.cyanAccent),
-                  title: Text('Mostrar / ocultar piano'))),
-                PopupMenuItem(value: 'midi', child: ListTile(
-                  dense: true, leading: Icon(Icons.piano, color: Colors.cyanAccent),
-                  title: Text('Dispositivos MIDI'))),
-                PopupMenuItem(value: 'stop', child: ListTile(
-                  dense: true, leading: Icon(Icons.stop_circle, color: Colors.redAccent),
-                  title: Text('Detener todos los audios'))),
-              ],
-            ),
-          ],
-        ),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxHeight < 720 || constraints.maxWidth < 1000;
-              return Column(
-                children: [
-                  SizedBox(
-                    height: compact ? 62 : 74,
-                    child: Row(
-                      children: [
-                        Expanded(flex: 5, child: _buildMasterControls(compact: compact)),
-                        Expanded(flex: 4, child: _buildBankSelector()),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 6, child: _buildPads(compact: compact)),
-                        if (showEditor)
-                          Expanded(flex: compact ? 3 : 4, child: _buildAudioEditorPanel()),
-                      ],
-                    ),
-                  ),
-                  _buildEffectsPanel(compact: compact),
-                  if (showPiano) _buildVirtualPiano(compact: compact),
-                  SizedBox(
-                    height: compact ? 28 : 34,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => setState(() => showPiano = !showPiano),
-                        icon: Icon(showPiano ? Icons.keyboard_hide : Icons.piano, color: uiAccent, size: 16),
-                        label: Text(
-                          showPiano ? 'OCULTAR PIANO' : 'MOSTRAR PIANO',
-                          style: TextStyle(color: uiAccent, fontSize: 10),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _buildStatusBar(),
-                ],
-              );
-            },
+                const Expanded(child: Center(child: Text('MI SAMPLER', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)))),
+                IconButton(tooltip: 'Detener todo', onPressed: _stopAll, icon: const Icon(Icons.stop_circle, color: Colors.redAccent, size: 18)),
+                IconButton(tooltip: 'Efectos maestros', onPressed: _openEffectsDialog, icon: Icon(Icons.equalizer, color: uiAccent, size: 18)),
+              ])),
+              SizedBox(height: 38, child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  _toolbarButton('NUEVO', Icons.add_box_outlined, _resetCurrentBank),
+                  _toolbarButton('GUARDAR', Icons.save_outlined, _saveSettings),
+                  _toolbarButton('CARGAR KIT', Icons.folder_open, _importPadKit),
+                  _toolbarButton(setupMode ? 'SALIR SETUP' : 'SETUP', Icons.settings_input_component, () => setState(() => setupMode = !setupMode), selected: setupMode),
+                  _toolbarButton('CARGAR WAV', Icons.audio_file, () => _loadAudio(editorPadIndex)),
+                  _toolbarButton('PIANO', Icons.piano, () => setState(() => showPiano = !showPiano)),
+                ]),
+              )),
+            ]),
           ),
+        ),
+        body: SafeArea(child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxHeight < 720 || constraints.maxWidth < 900;
+          return Column(children: [
+            SizedBox(height: compact ? 58 : 66, child: Row(children: [
+              Expanded(flex: 4, child: Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Row(children: [
+                  const Icon(Icons.graphic_eq, color: Colors.white, size: 27),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('SAMPLER\nPERREO', style: TextStyle(color: uiAccent, fontSize: compact ? 13 : 16, fontWeight: FontWeight.w900, height: 0.92, letterSpacing: 0.4))),
+                ]),
+              )),
+              Expanded(flex: 5, child: _buildBankSelector()),
+              Expanded(flex: 4, child: _buildMasterControls(compact: true)),
+            ])),
+            Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(flex: 2, child: Column(children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 2, 8, 4),
+                  child: Row(children: [
+                    const Text('PADS', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                    const Spacer(),
+                    Text('${pads.length} pads · ${_bankName(selectedBank)}', style: const TextStyle(color: Colors.white54, fontSize: 9)),
+                  ]),
+                ),
+                Expanded(child: _buildPads(compact: compact)),
+              ])),
+              if (showEditor) Expanded(flex: 1, child: _buildAudioEditorPanel()),
+            ])),
+            if (setupMode) _buildSetupMapper(compact: compact),
+            if (showPiano) _buildVirtualPiano(compact: compact, extended: setupMode),
+            _buildStatusBar(),
+          ]);
+        })),
+      ),
+    );
+  }
+
+  Widget _toolbarButton(String label, IconData icon, VoidCallback onPressed, {bool selected = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 14),
+        label: Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+        style: TextButton.styleFrom(
+          foregroundColor: selected ? Colors.white : Colors.white70,
+          backgroundColor: selected ? uiAccent.withOpacity(0.24) : const Color(0xFF30363D),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          minimumSize: const Size(0, 28),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
         ),
       ),
     );
   }
 
+  String _bankName(int index) => const ['Champeta', 'Dembow', 'SK-5', 'Personal'][index.clamp(0, 3).toInt()];
+
+  Future<void> _openEffectsDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF171D24),
+        title: Text('EFECTOS MAESTROS', style: TextStyle(color: uiAccent)),
+        content: SizedBox(width: 620, child: _buildEffectsPanel()),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CERRAR'))],
+      ),
+    );
+  }
+
+  Future<void> _resetCurrentBank() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF171D24),
+        title: const Text('Nuevo banco'),
+        content: Text('¿Vaciar los 16 pads del banco ${_bankName(selectedBank)}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('CANCELAR')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('VACIAR')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    for (final pad in pads) {
+      if (pad.handle != null && _audioReady) audio.stop(pad.handle!);
+      pad.handle = null;
+      pad.audioPath = null;
+      pad.audioName = null;
+      pad.active = false;
+      pad.volume = 1;
+      pad.pan = 0;
+      pad.normGain = 1;
+      pad.trimSeconds = 0;
+      pad.oneShot = true;
+    }
+    _audioCache.clear();
+    setState(() => editorPadIndex = 0);
+    await _saveSettings();
+    _showStatus('Banco ${_bankName(selectedBank)} preparado');
+  }
+
+  Widget _buildSetupMapper({bool compact = false}) {
+    final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
+    final skins = <String, Color>{
+      'Ámbar': Colors.amberAccent, 'Azul hielo': Colors.lightBlueAccent,
+      'Verde neón': Colors.greenAccent, 'Magenta': Colors.pinkAccent,
+      'Púrpura': Colors.purpleAccent, 'Rojo fuego': Colors.redAccent,
+      'Cian': Colors.cyanAccent, 'Grafito': Colors.blueGrey.shade200,
+    };
+    return Container(
+      height: compact ? 46 : 54,
+      margin: const EdgeInsets.fromLTRB(10, 2, 10, 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(color: const Color(0xFF252B31), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
+      child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+        _toolbarButton(identical(_learningNotePad, pad) ? 'ESPERANDO NOTA' : 'MIDI LEARN NOTA', Icons.piano, () => _startPadNoteLearn(pad), selected: identical(_learningNotePad, pad)),
+        _toolbarButton(identical(_learningVolumePad, pad) ? 'ESPERANDO CC' : 'APRENDER MOD', Icons.tune, () => _startPadVolumeLearn(pad), selected: identical(_learningVolumePad, pad)),
+        const SizedBox(width: 7),
+        const Text('PAD', style: TextStyle(color: Colors.white60, fontSize: 9)),
+        IconButton(tooltip: 'Pad anterior', visualDensity: VisualDensity.compact, onPressed: () => setState(() => editorPadIndex = (editorPadIndex - 1 + pads.length) % pads.length), icon: const Icon(Icons.chevron_left, size: 19)),
+        Text('${editorPadIndex + 1}', style: const TextStyle(fontSize: 10)),
+        IconButton(tooltip: 'Pad siguiente', visualDensity: VisualDensity.compact, onPressed: () => setState(() => editorPadIndex = (editorPadIndex + 1) % pads.length), icon: const Icon(Icons.chevron_right, size: 19)),
+        const SizedBox(width: 4),
+        const Text('MAPEAR DESDE', style: TextStyle(color: Colors.white60, fontSize: 9)),
+        IconButton(tooltip: 'Bajar nota base', visualDensity: VisualDensity.compact, onPressed: () => setState(() => midiMapBase = (midiMapBase - 1).clamp(0, 111).toInt()), icon: const Icon(Icons.remove, size: 16)),
+        Text('$midiMapBase', style: TextStyle(color: uiAccent, fontSize: 10)),
+        IconButton(tooltip: 'Subir nota base', visualDensity: VisualDensity.compact, onPressed: () => setState(() => midiMapBase = (midiMapBase + 1).clamp(0, 111).toInt()), icon: const Icon(Icons.add, size: 16)),
+        _toolbarButton('APLICAR A PADS', Icons.playlist_add, () {
+          for (var i = 0; i < pads.length; i++) { pads[i].midiNote = (midiMapBase + i).clamp(0, 127).toInt(); }
+          _saveSettings();
+          setState(() {});
+          _showStatus('Notas MIDI asignadas desde $midiMapBase');
+        }),
+        IconButton(tooltip: 'Bajar una octava', visualDensity: VisualDensity.compact, onPressed: () => setState(() => midiMapBase = (midiMapBase - 12).clamp(0, 111).toInt()), icon: const Icon(Icons.keyboard_double_arrow_down, size: 18)),
+        IconButton(tooltip: 'Subir una octava', visualDensity: VisualDensity.compact, onPressed: () => setState(() => midiMapBase = (midiMapBase + 12).clamp(0, 111).toInt()), icon: const Icon(Icons.keyboard_double_arrow_up, size: 18)),
+        const Text('PIEL', style: TextStyle(color: Colors.white60, fontSize: 9)),
+        DropdownButton<String>(
+          value: skins.containsKey(uiThemeName) ? uiThemeName : 'Grafito',
+          dropdownColor: const Color(0xFF252B31), underline: const SizedBox.shrink(), isDense: true,
+          items: skins.keys.map((name) => DropdownMenuItem(value: name, child: Text(name, style: const TextStyle(fontSize: 10)))).toList(),
+          onChanged: (name) {
+            if (name == null) return;
+            setState(() { uiThemeName = name; uiAccent = skins[name]!; uiBackground = const Color(0xFF101216); });
+            _saveSettings();
+          },
+        ),
+      ])),
+    );
+  }
   Future<void> _showMidiDevices() async {
     try {
       midiDevices = await midi.devices ?? [];
@@ -963,113 +1358,276 @@ final selectedFile = files.first;
   }
 
   Widget _buildAudioEditorPanel() {
-    final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
+    final padIndex = editorPadIndex.clamp(0, pads.length - 1).toInt();
+    final pad = pads[padIndex];
     return Container(
-      margin: const EdgeInsets.fromLTRB(3, 6, 10, 8), padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: const Color(0xFF101018),
-        borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.65))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.graphic_eq, color: Colors.purpleAccent, size: 17),
-          const SizedBox(width: 5),
-          Expanded(child: Text('EDITOR · ${pad.audioName ?? pad.name}', maxLines: 1,
-            overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-          DropdownButton<int>(value: editorPadIndex, dropdownColor: const Color(0xFF20202B),
-            items: List.generate(pads.length, (i) => DropdownMenuItem(value: i,
-              child: Text('PAD ${i + 1}', style: const TextStyle(fontSize: 10)))),
-            onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); }),
-        ]),
-        const SizedBox(height: 5),
-        Expanded(child: Container(decoration: BoxDecoration(color: const Color(0xFF08080D),
-          border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(6)),
-          child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
-            child: const SizedBox.expand()))),
-        Text('IN ${(editorIn * 100).round()}%     OUT ${(editorOut * 100).round()}%',
-          style: const TextStyle(color: Colors.white70, fontSize: 10)),
-        Row(children: [const Text('IN', style: TextStyle(color: Colors.purpleAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
-            activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v)))]),
-        Row(children: [const Text('OUT', style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorOut, min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(), max: 1,
-            activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v)))]),
-        Row(children: [
-          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _playPad(editorPadIndex),
-            icon: const Icon(Icons.play_arrow, size: 16), label: const Text('ESCUCHAR', style: TextStyle(fontSize: 10)))),
-          const SizedBox(width: 5),
-          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _showStatus(
-            'Selección marcada: IN ${editorIn.toStringAsFixed(2)} · OUT ${editorOut.toStringAsFixed(2)}. El recorte destructivo aún no está implementado.'),
-            icon: const Icon(Icons.content_cut, size: 16), label: const Text('MARCAR CORTE', style: TextStyle(fontSize: 10)))),
-        ]),
-        const Text('Vista de forma de onda ilustrativa; el recorte/exportación real de selección queda pendiente.',
-          style: TextStyle(color: Colors.white54, fontSize: 9)),
-      ]),
+      margin: const EdgeInsets.fromLTRB(5, 6, 10, 8),
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF24272C),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Text(
+              'Pad ${padIndex + 1} - ${pad.audioName ?? pad.name}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Row(children: [
+            Expanded(child: RotaryKnob(
+              compact: true,
+              label: 'VOLUMEN',
+              value: pad.volume,
+              min: 0,
+              max: 1,
+              display: '${(pad.volume * 100).round()}',
+              onChanged: (value) {
+                setState(() => pad.volume = value);
+                _saveSettings();
+              },
+            )),
+            Expanded(child: RotaryKnob(
+              compact: true,
+              label: 'PAN',
+              value: pad.pan,
+              min: -1,
+              max: 1,
+              display: pad.pan.toStringAsFixed(2),
+              accent: Colors.lightBlueAccent,
+              onChanged: (value) {
+                setState(() => pad.pan = value);
+                _saveSettings();
+              },
+            )),
+          ]),
+          Row(children: [
+            Expanded(child: SizedBox(
+              height: 31,
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() => pad.oneShot = !pad.oneShot);
+                  _saveSettings();
+                },
+                child: Text(
+                  pad.oneShot ? 'ONE-SHOT' : 'LOOP',
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            )),
+            const SizedBox(width: 6),
+            const Text('VELOCIDAD', style: TextStyle(color: Colors.white60, fontSize: 9)),
+            const SizedBox(width: 5),
+            Expanded(child: DropdownButton<int>(
+              value: velocityCurve,
+              isDense: true,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF20202B),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Lineal')),
+                DropdownMenuItem(value: 1, child: Text('Suave')),
+                DropdownMenuItem(value: 2, child: Text('Fuerte')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => velocityCurve = value);
+                _saveSettings();
+              },
+            )),
+          ]),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _loadAudio(padIndex),
+              icon: const Icon(Icons.audio_file, size: 16),
+              label: const Text('Cargar WAV', style: TextStyle(fontSize: 10)),
+            )),
+            const SizedBox(width: 6),
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _clearPad(padIndex),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Vaciar pad', style: TextStyle(fontSize: 10)),
+            )),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Text('AUDIO', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(
+              pad.audioPath == null ? 'Sin archivo' : (pad.audioName ?? 'Cargado'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white60, fontSize: 9),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Expanded(child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF101216),
+              border: Border.all(color: Colors.white12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: CustomPaint(
+              painter: _EditorWavePainter(inPoint: 0, outPoint: 1),
+              child: const SizedBox.expand(),
+            ),
+          )),
+          const SizedBox(height: 5),
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: null,
+              child: const Text('Cortar silencio', style: TextStyle(fontSize: 10)),
+            )),
+            const SizedBox(width: 6),
+            Expanded(child: OutlinedButton(
+              onPressed: null,
+              child: const Text('Normalizar', style: TextStyle(fontSize: 10)),
+            )),
+          ]),
+          const SizedBox(height: 5),
+          const Text('MASTER', style: TextStyle(color: Colors.white60, fontSize: 9)),
+          const SizedBox(height: 3),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: masterVolume,
+              minHeight: 8,
+              backgroundColor: const Color(0xFF101216),
+              valueColor: AlwaysStoppedAnimation<Color>(uiAccent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildVirtualPiano({bool compact = false}) {
+  Widget _buildVirtualPiano({bool compact = false, bool extended = false}) {
     const labels = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    final count = extended ? 49 : 25;
+    final firstNote = extended ? 48 : 72;
     return Container(
-      height: compact ? 62 : 86,
-      margin: EdgeInsets.symmetric(horizontal: compact ? 5 : 8, vertical: 1),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: const Color(0xFF12121A), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
+      height: extended ? (compact ? 68 : 88) : (compact ? 60 : 76),
+      margin: const EdgeInsets.fromLTRB(8, 1, 8, 3),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: const Color(0xFF171A1E), border: Border.all(color: Colors.white12), borderRadius: BorderRadius.circular(7)),
       child: Row(children: [
-        SizedBox(width: 92, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Text('PIANO VIRTUAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
-          DropdownButton<String>(value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
-            items: const [DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 10))), DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 10)))],
-            onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } }),
+        SizedBox(width: extended ? 50 : 72, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(extended ? 'MIDI' : 'PIANO', style: TextStyle(color: uiAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+          if (!extended) DropdownButton<String>(
+            value: pianoTone, isDense: true, dropdownColor: const Color(0xFF20202B),
+            items: const [
+              DropdownMenuItem(value: 'Piano', child: Text('Piano', style: TextStyle(fontSize: 9))),
+              DropdownMenuItem(value: 'Electrónico', child: Text('Electrónico', style: TextStyle(fontSize: 9))),
+            ],
+            onChanged: (v) { if (v != null) { setState(() { pianoTone = v; _pianoCache.clear(); }); _saveSettings(); } },
+          ),
         ])),
-        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(25, (i) {
-          final note = 60 + i;
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: List.generate(count, (i) {
+          final note = firstNote + i;
           final isBlack = const [1, 3, 6, 8, 10].contains(note % 12);
           final custom = pianoAudioPaths.containsKey(note);
-          return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: Tooltip(
-            message: 'MIDI $note · Mantén pulsado para cargar un audio propio',
-            child: Material(color: isBlack ? const Color(0xFF343443) : Colors.white, borderRadius: BorderRadius.circular(3),
-              child: InkWell(onTap: () => _playPianoNote(note), onLongPress: () => _loadPianoAudio(note),
-                child: Stack(children: [
-                  Align(alignment: Alignment.bottomCenter, child: Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(labels[note % 12], style: TextStyle(color: isBlack ? Colors.white : Colors.black, fontSize: 8)))),
-                  if (custom) const Positioned(top: 2, right: 2, child: Icon(Icons.music_note, size: 9, color: Colors.green)),
-                ])),
+          return Expanded(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0.5),
+            child: Tooltip(
+              message: 'MIDI $note · Mantén pulsado para cargar un audio',
+              child: Material(
+                color: isBlack ? const Color(0xFF343943) : const Color(0xFFF0F1F3),
+                borderRadius: BorderRadius.circular(2),
+                child: InkWell(
+                  onTap: () => _playPianoNote(note),
+                  onLongPress: () => _loadPianoAudio(note),
+                  child: Stack(children: [
+                    Align(alignment: Alignment.bottomCenter, child: Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(labels[note % 12], style: TextStyle(color: isBlack ? Colors.white : Colors.black, fontSize: extended ? 5 : 7)),
+                    )),
+                    if (custom) const Positioned(top: 1, right: 1, child: Icon(Icons.music_note, size: 7, color: Colors.green)),
+                  ]),
+                ),
+              ),
             ),
-          )));
+          ));
         }))),
       ]),
     );
   }
 
   Widget _buildBankSelector() {
-    const bankLabels = ['CHAMP', 'DEMB', 'SK-5', 'USER'];
     const fullNames = ['Champeta', 'Dembow', 'Casio SK-5', 'Personal'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    void selectBank(int index) {
+      setState(() => selectedBank = index);
+      _saveSettings();
+      _showStatus('${fullNames[index]} seleccionado · 16 pads independientes');
+    }
+
+    return Center(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('BANCO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 5),
-          for (int i = 0; i < 4; i++)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: SizedBox(
-                  height: 30,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: selectedBank == i ? Colors.deepPurpleAccent : const Color(0xFF292936),
-                    ),
-                    onPressed: () {
-                      setState(() => selectedBank = i);
-                      _saveSettings();
-                      _showStatus('${fullNames[i]} seleccionado · 16 pads independientes');
-                    },
-                    child: Text(bankLabels[i], style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
-                  ),
-                ),
+          IconButton(
+            tooltip: 'Kit anterior',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => selectBank((selectedBank - 1 + fullNames.length) % fullNames.length),
+            icon: const Icon(Icons.chevron_left, size: 25),
+          ),
+          PopupMenuButton<int>(
+            tooltip: 'Seleccionar kit',
+            initialValue: selectedBank,
+            onSelected: selectBank,
+            color: const Color(0xFF252B31),
+            itemBuilder: (context) => List.generate(
+              fullNames.length,
+              (index) => PopupMenuItem<int>(
+                value: index,
+                child: Row(children: [
+                  if (index == selectedBank)
+                    Icon(Icons.check, color: uiAccent, size: 16)
+                  else
+                    const SizedBox(width: 16),
+                  const SizedBox(width: 8),
+                  Text(fullNames[index]),
+                ]),
               ),
             ),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 130),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF191923),
+                border: Border.all(color: Colors.white24),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(
+                  child: Text(
+                    fullNames[selectedBank],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                const Icon(Icons.arrow_drop_down, size: 17, color: Colors.white70),
+              ]),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Kit siguiente',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => selectBank((selectedBank + 1) % fullNames.length),
+            icon: const Icon(Icons.chevron_right, size: 25),
+          ),
         ],
       ),
     );
@@ -1077,121 +1635,77 @@ final selectedFile = files.first;
 
   Widget _buildPads({bool compact = false}) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(compact ? 5 : 8, 3, compact ? 4 : 8, 4),
-      child: GridView.builder(
+      padding: EdgeInsets.fromLTRB(compact ? 6 : 10, 2, compact ? 4 : 8, 4),
+      child: LayoutBuilder(builder: (context, constraints) {
+        const columns = 4;
+        final spacing = compact ? 4.0 : 7.0;
+        final cellWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final cellHeight = (constraints.maxHeight - spacing * (columns - 1)) / columns;
+        final aspectRatio = cellWidth / cellHeight;
+        return GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: pads.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-          childAspectRatio: compact ? (compactPads ? 2.0 : 1.45) : (compactPads ? 1.75 : 1.2),
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: aspectRatio,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
+          final selected = editorPadIndex == index;
           final hasAudio = pad.audioPath != null;
-
           return AnimatedContainer(
             duration: const Duration(milliseconds: 100),
             decoration: BoxDecoration(
-              color: pad.active
-                  ? pad.color.withOpacity(0.85)
-                  : pad.color.withOpacity(hasAudio ? 0.20 : 0.08),
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: pad.color,
-                width: pad.active ? 2.5 : 1,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: pad.active
+                    ? [pad.color.withOpacity(0.82), pad.color.withOpacity(0.42)]
+                    : const [Color(0xFF343A40), Color(0xFF252B31)],
               ),
-              boxShadow: pad.active
-                  ? [
-                      BoxShadow(
-                        color: pad.color.withOpacity(0.5),
-                        blurRadius: 12,
-                      ),
-                    ]
-                  : [],
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: selected ? Colors.white70 : Colors.white12, width: selected ? 2 : 1),
+              boxShadow: pad.active ? [BoxShadow(color: pad.color.withOpacity(0.35), blurRadius: 10)] : const [],
             ),
-            child: Padding(
-              padding: EdgeInsets.all(compact ? 3 : 4),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _padLabel(index),
-                          style: TextStyle(
-                            fontSize: compact ? 9 : 11,
-                            fontWeight: FontWeight.bold,
-                            color: pad.color,
-                          ),
-                        ),
-                      ),
-                      if (hasAudio)
-                        InkWell(
-                          onTap: () => _clearPad(index),
-                          child: const Icon(
-                            Icons.close,
-                            size: 15,
-                            color: Colors.white70,
-                          ),
-                        ),
-                    ],
-                  ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _playPad(index),
-                      child: Center(
-                        child: Icon(
-                          hasAudio ? Icons.music_note : Icons.library_music,
-                          size: compact ? 15 : 19,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: compact ? 19 : 23,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _loadAudio(index),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: hasAudio
-                            ? const Color(0xFF292936)
-                            : Colors.deepPurpleAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      icon: Icon(
-                        hasAudio ? Icons.refresh : Icons.add,
-                        size: 13,
-                      ),
-                      label: Text(
-                        hasAudio ? 'CAMBIAR AUDIO' : 'CARGAR AUDIO',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: compact ? 7 : 9),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    hasAudio
-                        ? (pad.audioName ?? 'Audio cargado')
-                        : 'Tecla ${pad.keyLabel} · MIDI ${pad.midiNote}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: compact ? 7 : 9,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: () {
+                  setState(() => editorPadIndex = index);
+                  _playPad(index);
+                },
+                onLongPress: () {
+                  setState(() => editorPadIndex = index);
+                  _loadAudio(index);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(5),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${index + 1}', style: TextStyle(color: Colors.white54, fontSize: compact ? 8 : 10)),
+                    Expanded(child: Center(child: Text(
+                      pad.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: compact ? 15 : 18, fontWeight: FontWeight.bold),
+                    ))),
+                    Center(child: Text(
+                      hasAudio ? (pad.audioName ?? 'Audio listo') : 'MIDI ${pad.midiNote}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white60, fontSize: compact ? 7 : 8),
+                    )),
+                  ]),
+                ),
               ),
             ),
           );
         },
-      ),
+        );
+      }),
     );
   }
 
