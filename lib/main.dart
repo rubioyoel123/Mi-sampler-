@@ -1465,35 +1465,71 @@ final selectedFile = files.first;
   }
 
   Widget _buildBankSelector() {
-    const bankLabels = ['CHAMP', 'DEMB', 'SK-5', 'USER'];
     const fullNames = ['Champeta', 'Dembow', 'Casio SK-5', 'Personal'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    void selectBank(int index) {
+      setState(() => selectedBank = index);
+      _saveSettings();
+      _showStatus('${fullNames[index]} seleccionado · 16 pads independientes');
+    }
+
+    return Center(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('BANCO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 5),
-          for (int i = 0; i < 4; i++)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: SizedBox(
-                  height: 30,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: selectedBank == i ? Colors.deepPurpleAccent : const Color(0xFF292936),
-                    ),
-                    onPressed: () {
-                      setState(() => selectedBank = i);
-                      _saveSettings();
-                      _showStatus('${fullNames[i]} seleccionado · 16 pads independientes');
-                    },
-                    child: Text(bankLabels[i], style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
-                  ),
-                ),
+          IconButton(
+            tooltip: 'Kit anterior',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => selectBank((selectedBank - 1 + fullNames.length) % fullNames.length),
+            icon: const Icon(Icons.chevron_left, size: 25),
+          ),
+          PopupMenuButton<int>(
+            tooltip: 'Seleccionar kit',
+            initialValue: selectedBank,
+            onSelected: selectBank,
+            color: const Color(0xFF252B31),
+            itemBuilder: (context) => List.generate(
+              fullNames.length,
+              (index) => PopupMenuItem<int>(
+                value: index,
+                child: Row(children: [
+                  if (index == selectedBank)
+                    Icon(Icons.check, color: uiAccent, size: 16)
+                  else
+                    const SizedBox(width: 16),
+                  const SizedBox(width: 8),
+                  Text(fullNames[index]),
+                ]),
               ),
             ),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 130),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF191923),
+                border: Border.all(color: Colors.white24),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(
+                  child: Text(
+                    fullNames[selectedBank],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                const Icon(Icons.arrow_drop_down, size: 17, color: Colors.white70),
+              ]),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Kit siguiente',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => selectBank((selectedBank + 1) % fullNames.length),
+            icon: const Icon(Icons.chevron_right, size: 25),
+          ),
         ],
       ),
     );
