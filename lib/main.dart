@@ -1025,7 +1025,7 @@ final selectedFile = files.first;
               Expanded(flex: 4, child: _buildMasterControls(compact: true)),
             ])),
             Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Expanded(flex: 6, child: Column(children: [
+              Expanded(flex: 2, child: Column(children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 2, 8, 4),
                   child: Row(children: [
@@ -1036,7 +1036,7 @@ final selectedFile = files.first;
                 ),
                 Expanded(child: _buildPads(compact: compact)),
               ])),
-              if (showEditor) Expanded(flex: compact ? 4 : 3, child: _buildAudioEditorPanel()),
+              if (showEditor) Expanded(flex: 1, child: _buildAudioEditorPanel()),
             ])),
             if (setupMode) _buildSetupMapper(compact: compact),
             if (showPiano) _buildVirtualPiano(compact: compact, extended: setupMode),
@@ -1327,103 +1327,156 @@ final selectedFile = files.first;
   }
 
   Widget _buildAudioEditorPanel() {
-    final pad = pads[editorPadIndex.clamp(0, pads.length - 1).toInt()];
+    final padIndex = editorPadIndex.clamp(0, pads.length - 1).toInt();
+    final pad = pads[padIndex];
     return Container(
-      margin: const EdgeInsets.fromLTRB(3, 6, 10, 8), padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: const Color(0xFF101018),
-        borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.65))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.graphic_eq, color: Colors.purpleAccent, size: 17),
-          const SizedBox(width: 5),
-          Expanded(child: Text('EDITOR · ${pad.audioName ?? pad.name}', maxLines: 1,
-            overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-          DropdownButton<int>(value: editorPadIndex, dropdownColor: const Color(0xFF20202B),
-            items: List.generate(pads.length, (i) => DropdownMenuItem(value: i,
-              child: Text('PAD ${i + 1}', style: const TextStyle(fontSize: 10)))),
-            onChanged: (v) { if (v != null) setState(() => editorPadIndex = v); }),
-        ]),
-        Row(children: [
-          const Text('RESPUESTA', style: TextStyle(color: Colors.white60, fontSize: 9)),
-          const SizedBox(width: 6),
-          Expanded(child: DropdownButton<int>(
-            value: velocityCurve, isDense: true, isExpanded: true,
-            dropdownColor: const Color(0xFF20202B),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Lineal')),
-              DropdownMenuItem(value: 1, child: Text('Suave')),
-              DropdownMenuItem(value: 2, child: Text('Fuerte')),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => velocityCurve = value);
-              _saveSettings();
-            },
-          )),
-        ]),
-        Row(children: [
-          Expanded(child: RotaryKnob(
-            compact: true, label: 'VOLUMEN', value: pad.volume, min: 0, max: 1,
-            display: '${(pad.volume * 100).round()}%',
-            onChanged: (value) { setState(() => pad.volume = value); _saveSettings(); },
-          )),
-          Expanded(child: RotaryKnob(
-            compact: true, label: 'PAN', value: pad.pan, min: -1, max: 1,
-            display: pad.pan.toStringAsFixed(2),
-            onChanged: (value) { setState(() => pad.pan = value); _saveSettings(); },
-            accent: Colors.lightBlueAccent,
-          )),
-          Expanded(flex: 2, child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(
-              height: 25,
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () { setState(() => pad.oneShot = !pad.oneShot); _saveSettings(); },
-                style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                child: Text(pad.oneShot ? 'ONE-SHOT' : 'LOOP', style: const TextStyle(fontSize: 9)),
+      margin: const EdgeInsets.fromLTRB(5, 6, 10, 8),
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF24272C),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Text(
+              'Pad ${padIndex + 1} - ${pad.audioName ?? pad.name}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              IconButton(
-                tooltip: identical(_learningNotePad, pad) ? 'Cancelar MIDI Learn de nota' : 'MIDI Learn de nota',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _startPadNoteLearn(pad),
-                icon: Icon(Icons.piano, size: 15, color: identical(_learningNotePad, pad) ? Colors.orangeAccent : uiAccent),
+          ),
+          Row(children: [
+            Expanded(child: RotaryKnob(
+              compact: true,
+              label: 'VOLUMEN',
+              value: pad.volume,
+              min: 0,
+              max: 1,
+              display: '${(pad.volume * 100).round()}',
+              onChanged: (value) {
+                setState(() => pad.volume = value);
+                _saveSettings();
+              },
+            )),
+            Expanded(child: RotaryKnob(
+              compact: true,
+              label: 'PAN',
+              value: pad.pan,
+              min: -1,
+              max: 1,
+              display: pad.pan.toStringAsFixed(2),
+              accent: Colors.lightBlueAccent,
+              onChanged: (value) {
+                setState(() => pad.pan = value);
+                _saveSettings();
+              },
+            )),
+          ]),
+          Row(children: [
+            Expanded(child: SizedBox(
+              height: 31,
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() => pad.oneShot = !pad.oneShot);
+                  _saveSettings();
+                },
+                child: Text(
+                  pad.oneShot ? 'ONE-SHOT' : 'LOOP',
+                  style: const TextStyle(fontSize: 10),
+                ),
               ),
-              IconButton(
-                tooltip: identical(_learningVolumePad, pad) ? 'Cancelar MIDI Learn de volumen' : 'MIDI Learn de volumen',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _startPadVolumeLearn(pad),
-                icon: Icon(Icons.tune, size: 15, color: identical(_learningVolumePad, pad) ? Colors.orangeAccent : uiAccent),
-              ),
-              Text('N ${pad.midiNote}', style: const TextStyle(fontSize: 8, color: Colors.white70)),
-            ]),
-          ])),
-        ]),
-        const SizedBox(height: 4),
-        Expanded(child: Container(decoration: BoxDecoration(color: const Color(0xFF08080D),
-          border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(6)),
-          child: CustomPaint(painter: _EditorWavePainter(inPoint: editorIn, outPoint: editorOut),
-            child: const SizedBox.expand()))),
-        Text('IN ${(editorIn * 100).round()}%     OUT ${(editorOut * 100).round()}%',
-          style: const TextStyle(color: Colors.white70, fontSize: 10)),
-        Row(children: [const Text('IN', style: TextStyle(color: Colors.purpleAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorIn, min: 0, max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
-            activeColor: Colors.purpleAccent, onChanged: (v) => setState(() => editorIn = v)))]),
-        Row(children: [const Text('OUT', style: TextStyle(color: Colors.blueAccent, fontSize: 10)),
-          Expanded(child: Slider(value: editorOut, min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(), max: 1,
-            activeColor: Colors.blueAccent, onChanged: (v) => setState(() => editorOut = v)))]),
-        Row(children: [
-          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _playPad(editorPadIndex),
-            icon: const Icon(Icons.play_arrow, size: 16), label: const Text('ESCUCHAR', style: TextStyle(fontSize: 10)))),
-          const SizedBox(width: 5),
-          Expanded(child: OutlinedButton.icon(onPressed: pad.audioPath == null ? null : () => _showStatus(
-            'Selección marcada: IN ${editorIn.toStringAsFixed(2)} · OUT ${editorOut.toStringAsFixed(2)}. El recorte destructivo aún no está implementado.'),
-            icon: const Icon(Icons.content_cut, size: 16), label: const Text('MARCAR CORTE', style: TextStyle(fontSize: 10)))),
-        ]),
-        const Text('Vista de forma de onda ilustrativa; el recorte/exportación real de selección queda pendiente.',
-          style: TextStyle(color: Colors.white54, fontSize: 9)),
-      ]),
+            )),
+            const SizedBox(width: 6),
+            const Text('VELOCIDAD', style: TextStyle(color: Colors.white60, fontSize: 9)),
+            const SizedBox(width: 5),
+            Expanded(child: DropdownButton<int>(
+              value: velocityCurve,
+              isDense: true,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF20202B),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Lineal')),
+                DropdownMenuItem(value: 1, child: Text('Suave')),
+                DropdownMenuItem(value: 2, child: Text('Fuerte')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => velocityCurve = value);
+                _saveSettings();
+              },
+            )),
+          ]),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _loadAudio(padIndex),
+              icon: const Icon(Icons.audio_file, size: 16),
+              label: const Text('Cargar WAV', style: TextStyle(fontSize: 10)),
+            )),
+            const SizedBox(width: 6),
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _clearPad(padIndex),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Vaciar pad', style: TextStyle(fontSize: 10)),
+            )),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Text('AUDIO', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(
+              pad.audioPath == null ? 'Sin archivo' : (pad.audioName ?? 'Cargado'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white60, fontSize: 9),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Expanded(child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF101216),
+              border: Border.all(color: Colors.white12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: CustomPaint(
+              painter: _EditorWavePainter(inPoint: 0, outPoint: 1),
+              child: const SizedBox.expand(),
+            ),
+          )),
+          const SizedBox(height: 5),
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: null,
+              child: const Text('Cortar silencio', style: TextStyle(fontSize: 10)),
+            )),
+            const SizedBox(width: 6),
+            Expanded(child: OutlinedButton(
+              onPressed: null,
+              child: const Text('Normalizar', style: TextStyle(fontSize: 10)),
+            )),
+          ]),
+          const SizedBox(height: 5),
+          const Text('MASTER', style: TextStyle(color: Colors.white60, fontSize: 9)),
+          const SizedBox(height: 3),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: masterVolume,
+              minHeight: 8,
+              backgroundColor: const Color(0xFF101216),
+              valueColor: AlwaysStoppedAnimation<Color>(uiAccent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1552,13 +1605,20 @@ final selectedFile = files.first;
   Widget _buildPads({bool compact = false}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(compact ? 6 : 10, 2, compact ? 4 : 8, 4),
-      child: GridView.builder(
+      child: LayoutBuilder(builder: (context, constraints) {
+        const columns = 4;
+        final spacing = compact ? 4.0 : 7.0;
+        final cellWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final cellHeight = (constraints.maxHeight - spacing * (columns - 1)) / columns;
+        final aspectRatio = cellWidth / cellHeight;
+        return GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: pads.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4,
-          crossAxisSpacing: compact ? 4 : 7,
-          mainAxisSpacing: compact ? 4 : 7,
-          childAspectRatio: compact ? 1.15 : 1.22,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: aspectRatio,
         ),
         itemBuilder: (context, index) {
           final pad = pads[index];
@@ -1613,7 +1673,8 @@ final selectedFile = files.first;
             ),
           );
         },
-      ),
+        );
+      }),
     );
   }
 
