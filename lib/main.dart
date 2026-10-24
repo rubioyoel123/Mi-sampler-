@@ -92,6 +92,9 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool echoEnabled = false;
   bool reverbEnabled = false;
   bool flangerEnabled = false;
+  bool _echoFilterApplied = false;
+  bool _reverbFilterApplied = false;
+  bool _flangerFilterApplied = false;
   bool showPiano = true;
   Color uiAccent = Colors.blueGrey.shade200;
   Color uiBackground = const Color(0xFF101016);
@@ -377,13 +380,41 @@ class _SamplerHomeState extends State<SamplerHome> {
   void _applyEffects() {
     if (!_audioReady) return;
     final filters = audio.filters;
-    filters.echoFilter.delay.value = echoDelay;
-    filters.echoFilter.decay.value = echoDecay;
-    if (echoEnabled) { filters.echoFilter.activate(); } else { filters.echoFilter.deactivate(); }
-    filters.freeverbFilter.roomSize.value = reverbRoom;
-    filters.freeverbFilter.damp.value = reverbDamp;
-    if (reverbEnabled) { filters.freeverbFilter.activate(); } else { filters.freeverbFilter.deactivate(); }
-    if (flangerEnabled && flangerAmount > 0.01) { filters.flangerFilter.activate(); } else { filters.flangerFilter.deactivate(); }
+
+    if (echoEnabled) {
+      filters.echoFilter
+        ..delay.value = echoDelay
+        ..decay.value = echoDecay;
+      if (!_echoFilterApplied) {
+        filters.echoFilter.activate();
+        _echoFilterApplied = true;
+      }
+    } else if (_echoFilterApplied) {
+      filters.echoFilter.deactivate();
+      _echoFilterApplied = false;
+    }
+
+    if (reverbEnabled) {
+      filters.freeverbFilter
+        ..roomSize.value = reverbRoom
+        ..damp.value = reverbDamp;
+      if (!_reverbFilterApplied) {
+        filters.freeverbFilter.activate();
+        _reverbFilterApplied = true;
+      }
+    } else if (_reverbFilterApplied) {
+      filters.freeverbFilter.deactivate();
+      _reverbFilterApplied = false;
+    }
+
+    final shouldApplyFlanger = flangerEnabled && flangerAmount > 0.01;
+    if (shouldApplyFlanger && !_flangerFilterApplied) {
+      filters.flangerFilter.activate();
+      _flangerFilterApplied = true;
+    } else if (!shouldApplyFlanger && _flangerFilterApplied) {
+      filters.flangerFilter.deactivate();
+      _flangerFilterApplied = false;
+    }
   }
 
   Future<void> _initMidi() async {
