@@ -554,6 +554,9 @@ final selectedFile = files.first;
 
       final kitFile = File(files.first.path!);
       final kit = PadKit.parse(await kitFile.readAsString());
+      final isJrProdNumberedKit =
+          kitFile.uri.pathSegments.last.toLowerCase() ==
+              'kit jr d55 dd14 sk5.padkit';
       final padEntries = kit.pads.where((pad) => pad.index >= 0 && pad.index < 16).toList()
         ..sort((a, b) => a.index.compareTo(b.index));
       final pianoEntries = kit.pads.where((pad) => pad.index >= 16 && pad.index <= 40).toList()
@@ -611,7 +614,9 @@ final selectedFile = files.first;
       var missingAudio = 0;
       for (final kitPad in padEntries) {
         final pad = banks[targetBankIndex][kitPad.index];
-        pad.name = kitPad.name.isEmpty ? 'PAD ${kitPad.index + 1}' : kitPad.name;
+        pad.name = isJrProdNumberedKit
+            ? 'PAD ${kitPad.index + 1}'
+            : (kitPad.name.isEmpty ? 'PAD ${kitPad.index + 1}' : kitPad.name);
         pad.midiNote = kitPad.note;
         pad.volume = kitPad.gain.clamp(0.0, 1.0).toDouble();
         pad.pan = kitPad.pan.clamp(-1.0, 1.0).toDouble();
@@ -620,13 +625,17 @@ final selectedFile = files.first;
         pad.volumeCC = kitPad.volumeCC;
         pad.oneShot = kitPad.oneShot;
 
-        final sourcePath = await _resolveKitAudioPath(kitFile, kitPad.file);
+        final numberedPath = isJrProdNumberedKit
+            ? await _resolveKitAudioPath(kitFile, '${kitPad.index + 1}.wav')
+            : null;
+        final sourcePath = numberedPath ??
+            await _resolveKitAudioPath(kitFile, kitPad.file);
         if (sourcePath == null) {
-          if (kitPad.file.isNotEmpty) missingAudio++;
+          if (kitPad.file.isNotEmpty || isJrProdNumberedKit) missingAudio++;
           continue;
         }
         pad.audioPath = await _copyAudioToLibrary(sourcePath);
-        pad.audioName = kitPad.name;
+        pad.audioName = File(sourcePath).uri.pathSegments.last;
         loadedAudio++;
       }
 
