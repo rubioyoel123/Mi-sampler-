@@ -625,8 +625,13 @@ final selectedFile = files.first;
         pad.volumeCC = kitPad.volumeCC;
         pad.oneShot = kitPad.oneShot;
 
+        final numberedSampleName = kitPad.index == 7
+            ? '8-2.wav'
+            : kitPad.index == 15
+                ? '8-3.wav'
+                : '${kitPad.index + 1}.wav';
         final numberedPath = isJrProdNumberedKit
-            ? await _resolveKitAudioPath(kitFile, '${kitPad.index + 1}.wav')
+            ? await _resolveKitAudioPath(kitFile, numberedSampleName)
             : null;
         final sourcePath = numberedPath ??
             await _resolveKitAudioPath(kitFile, kitPad.file);
