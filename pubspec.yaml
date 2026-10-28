@@ -16,6 +16,7 @@ dependencies:
   flutter_soloud: ^5.1.2
   file_picker: ^13.1.0
   flutter_midi_command: ^1.4.0
+  xml: ^6.4.2
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
 
