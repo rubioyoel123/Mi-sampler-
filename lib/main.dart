@@ -197,7 +197,7 @@ class _SamplerHomeState extends State<SamplerHome> {
   bool reverbEnabled = false;
   bool flangerEnabled = false;
   bool showPiano = true;
-  Color uiAccent = Colors.cyanAccent;
+  Color uiAccent = const Color(0xFF78B6D8);
   Color uiBackground = const Color(0xFF101016);
   String uiThemeName = 'Neón';
   bool compactPads = true;
@@ -210,8 +210,8 @@ class _SamplerHomeState extends State<SamplerHome> {
 
   Future<void> _openSettings() async {
     const themes = <String, Color>{
-      'Neón': Colors.cyanAccent,
-      'Morado': Colors.purpleAccent,
+      'Neón': const Color(0xFF78B6D8),
+      'Morado': const Color(0xFF7297B5),
       'Azul': Colors.lightBlueAccent,
       'Verde': Colors.greenAccent,
       'Rojo': Colors.redAccent,
@@ -229,9 +229,9 @@ class _SamplerHomeState extends State<SamplerHome> {
           backgroundColor: const Color(0xFF151C28),
           title: const Row(
             children: [
-              Icon(Icons.tune, color: Colors.cyanAccent),
+              Icon(Icons.tune, color: const Color(0xFF78B6D8)),
               SizedBox(width: 8),
-              Text('AJUSTES DE SAMPLER'),
+              Text('AJUSTES DE DANPAD'),
             ],
           ),
           content: SizedBox(
@@ -244,7 +244,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   const Text(
                     'TEMA Y COLOR PRINCIPAL',
                     style: TextStyle(
-                      color: Colors.cyanAccent,
+                      color: const Color(0xFF78B6D8),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -295,7 +295,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   const Text(
                     'DISTRIBUCIÓN',
                     style: TextStyle(
-                      color: Colors.cyanAccent,
+                      color: const Color(0xFF78B6D8),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -333,7 +333,7 @@ class _SamplerHomeState extends State<SamplerHome> {
               onPressed: () async {
                 setState(() {
                   uiThemeName = draftTheme;
-                  uiAccent = themes[draftTheme] ?? Colors.cyanAccent;
+                  uiAccent = themes[draftTheme] ?? const Color(0xFF78B6D8);
                   compactPads = draftCompact;
                   showEditor = draftEditor;
                 });
@@ -386,7 +386,7 @@ class _SamplerHomeState extends State<SamplerHome> {
           'C',
           'V',
         ][i],
-        color: Colors.primaries[i % Colors.primaries.length],
+        color: const Color(0xFF527C9E),
         midiNote: 36 + i,
       ),
     ),
@@ -437,8 +437,8 @@ class _SamplerHomeState extends State<SamplerHome> {
         masterVolume = prefs.getDouble('masterVolume') ?? 0.8;
         uiThemeName = prefs.getString('uiThemeName') ?? 'Neón';
         const savedThemes = {
-          'Neón': Colors.cyanAccent,
-          'Morado': Colors.purpleAccent,
+          'Neón': const Color(0xFF78B6D8),
+          'Morado': const Color(0xFF7297B5),
           'Azul': Colors.lightBlueAccent,
           'Verde': Colors.greenAccent,
           'Rojo': Colors.redAccent,
@@ -446,7 +446,7 @@ class _SamplerHomeState extends State<SamplerHome> {
           'Rosa': Colors.pinkAccent,
           'Dorado': Colors.amberAccent,
         };
-        uiAccent = savedThemes[uiThemeName] ?? Colors.cyanAccent;
+        uiAccent = savedThemes[uiThemeName] ?? const Color(0xFF78B6D8);
         compactPads = prefs.getBool('compactPads') ?? true;
         showEditor = prefs.getBool('showEditor') ?? true;
         masterPitch = prefs.getDouble('masterPitch') ?? 1.0;
@@ -471,7 +471,7 @@ class _SamplerHomeState extends State<SamplerHome> {
               SamplePad(
                 name: 'PAD ${index + 1}',
                 keyLabel: '',
-                color: Colors.primaries[index % Colors.primaries.length],
+                color: const Color(0xFF527C9E),
                 midiNote: (48 + index).clamp(0, 127).toInt(),
               ),
             );
@@ -798,7 +798,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       final loadedPads = List<SamplePad>.generate(lastPadIndex + 1, (index) {
         final pad = padsByIndex[index];
         final keyLabel = index < labels.length ? labels[index] : '';
-        final color = Colors.primaries[index % Colors.primaries.length];
+        final color = const Color(0xFF527C9E);
         if (pad == null) {
           return SamplePad(
             name: 'PAD ${index + 1}',
@@ -1518,7 +1518,7 @@ class _SamplerHomeState extends State<SamplerHome> {
             PopupMenuButton<String>(
               tooltip: 'Menú de DANPAD',
               color: const Color(0xFF171D29),
-              icon: const Icon(Icons.menu, color: Colors.cyanAccent),
+              icon: const Icon(Icons.menu, color: const Color(0xFF78B6D8)),
               onSelected: (choice) {
                 if (choice == 'settings') _openSettings();
                 if (choice == 'save') _saveSettings();
@@ -1534,7 +1534,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'settings',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.tune, color: Colors.cyanAccent),
+                    leading: Icon(Icons.tune, color: const Color(0xFF78B6D8)),
                     title: Text('Apariencia y opciones'),
                   ),
                 ),
@@ -1542,7 +1542,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'save',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.save, color: Colors.cyanAccent),
+                    leading: Icon(Icons.save, color: const Color(0xFF78B6D8)),
                     title: Text('Guardar ajustes'),
                   ),
                 ),
@@ -1550,7 +1550,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'loadKit',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.folder_open, color: Colors.cyanAccent),
+                    leading: Icon(Icons.folder_open, color: const Color(0xFF78B6D8)),
                     title: Text('Cargar kit XML'),
                   ),
                 ),
@@ -1558,7 +1558,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'saveKit',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.library_add, color: Colors.cyanAccent),
+                    leading: Icon(Icons.library_add, color: const Color(0xFF78B6D8)),
                     title: Text('Guardar kit portable'),
                   ),
                 ),
@@ -1566,7 +1566,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'load',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.audio_file, color: Colors.cyanAccent),
+                    leading: Icon(Icons.audio_file, color: const Color(0xFF78B6D8)),
                     title: Text('Cargar audio al pad seleccionado'),
                   ),
                 ),
@@ -1574,7 +1574,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'piano',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.piano, color: Colors.cyanAccent),
+                    leading: Icon(Icons.piano, color: const Color(0xFF78B6D8)),
                     title: Text('Mostrar / ocultar piano'),
                   ),
                 ),
@@ -1582,7 +1582,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   value: 'midi',
                   child: ListTile(
                     dense: true,
-                    leading: Icon(Icons.piano, color: Colors.cyanAccent),
+                    leading: Icon(Icons.piano, color: const Color(0xFF78B6D8)),
                     title: Text('Dispositivos MIDI'),
                   ),
                 ),
@@ -1687,7 +1687,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                           (device) => ListTile(
                             leading: const Icon(
                               Icons.piano,
-                              color: Colors.cyanAccent,
+                              color: const Color(0xFF78B6D8),
                             ),
                             title: Text(device.name ?? 'Controlador MIDI'),
                             subtitle: Text(device.id ?? ''),
@@ -1717,7 +1717,7 @@ class _SamplerHomeState extends State<SamplerHome> {
         vertical: compact ? 4 : 8,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF191923),
+        color: const Color(0xFF111B26),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white12),
       ),
@@ -1727,7 +1727,7 @@ class _SamplerHomeState extends State<SamplerHome> {
             child: Text(
               'CONTROLES MAESTROS',
               style: TextStyle(
-                color: Colors.cyanAccent,
+                color: const Color(0xFF78B6D8),
                 fontSize: compact ? 9 : 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.4,
@@ -1822,7 +1822,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   echoEnabled = true;
                 },
                 '${echoDelay.toStringAsFixed(2)} s',
-                Colors.purpleAccent,
+                const Color(0xFF7297B5),
               ),
               knob(
                 'ECO DECAY',
@@ -1834,7 +1834,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   echoEnabled = true;
                 },
                 '${(echoDecay * 100).round()}%',
-                Colors.purpleAccent,
+                const Color(0xFF7297B5),
               ),
               knob(
                 'REVERB ROOM',
@@ -1846,7 +1846,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   reverbEnabled = true;
                 },
                 '${(reverbRoom * 100).round()}%',
-                Colors.cyanAccent,
+                const Color(0xFF78B6D8),
               ),
               knob(
                 'REVERB DAMP',
@@ -1858,7 +1858,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   reverbEnabled = true;
                 },
                 '${(reverbDamp * 100).round()}%',
-                Colors.cyanAccent,
+                const Color(0xFF78B6D8),
               ),
               knob(
                 'FLANGER',
@@ -1933,7 +1933,7 @@ class _SamplerHomeState extends State<SamplerHome> {
       decoration: BoxDecoration(
         color: const Color(0xFF101018),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.65)),
+        border: Border.all(color: const Color(0xFF476A88).withOpacity(0.65)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1942,7 +1942,7 @@ class _SamplerHomeState extends State<SamplerHome> {
             children: [
               const Icon(
                 Icons.graphic_eq,
-                color: Colors.purpleAccent,
+                color: const Color(0xFF7297B5),
                 size: 17,
               ),
               const SizedBox(width: 5),
@@ -1952,7 +1952,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.purpleAccent,
+                    color: const Color(0xFF7297B5),
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                   ),
@@ -2002,14 +2002,14 @@ class _SamplerHomeState extends State<SamplerHome> {
             children: [
               const Text(
                 'IN',
-                style: TextStyle(color: Colors.purpleAccent, fontSize: 10),
+                style: TextStyle(color: const Color(0xFF7297B5), fontSize: 10),
               ),
               Expanded(
                 child: Slider(
                   value: editorIn,
                   min: 0,
                   max: (editorOut - 0.02).clamp(0.0, 1.0).toDouble(),
-                  activeColor: Colors.purpleAccent,
+                  activeColor: const Color(0xFF7297B5),
                   onChanged: (v) => setState(() => editorIn = v),
                 ),
               ),
@@ -2019,14 +2019,14 @@ class _SamplerHomeState extends State<SamplerHome> {
             children: [
               const Text(
                 'OUT',
-                style: TextStyle(color: Colors.blueAccent, fontSize: 10),
+                style: TextStyle(color: const Color(0xFF78B6D8), fontSize: 10),
               ),
               Expanded(
                 child: Slider(
                   value: editorOut,
                   min: (editorIn + 0.02).clamp(0.0, 1.0).toDouble(),
                   max: 1,
-                  activeColor: Colors.blueAccent,
+                  activeColor: const Color(0xFF78B6D8),
                   onChanged: (v) => setState(() => editorOut = v),
                 ),
               ),
@@ -2104,7 +2104,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                   'PIANO VIRTUAL',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.purpleAccent,
+                    color: const Color(0xFF7297B5),
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2223,7 +2223,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
                       backgroundColor: selectedBank == i
-                          ? Colors.deepPurpleAccent
+                          ? const Color(0xFF476A88)
                           : const Color(0xFF292936),
                     ),
                     onPressed: () {
@@ -2351,7 +2351,7 @@ class _SamplerHomeState extends State<SamplerHome> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: hasAudio
                             ? const Color(0xFF292936)
-                            : Colors.deepPurpleAccent,
+                            : const Color(0xFF476A88),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2393,13 +2393,13 @@ class _SamplerHomeState extends State<SamplerHome> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      color: const Color(0xFF191923),
+      color: const Color(0xFF111B26),
       child: Text(
         status,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.cyanAccent, fontSize: 11),
+        style: const TextStyle(color: const Color(0xFF78B6D8), fontSize: 11),
       ),
     );
   }
@@ -2415,7 +2415,7 @@ class RotaryKnob extends StatelessWidget {
     required this.max,
     required this.display,
     required this.onChanged,
-    this.accent = Colors.cyanAccent,
+    this.accent = const Color(0xFF78B6D8),
   });
 
   final bool compact;
@@ -2472,7 +2472,7 @@ class RotaryKnob extends StatelessWidget {
 }
 
 class KnobPainter extends CustomPainter {
-  KnobPainter({required this.progress, this.accent = Colors.cyanAccent});
+  KnobPainter({required this.progress, this.accent = const Color(0xFF78B6D8)});
 
   final double progress;
   final Color accent;
@@ -2564,20 +2564,20 @@ class _EditorWavePainter extends CustomPainter {
     final xOut = size.width * outPoint;
     canvas.drawRect(
       Rect.fromLTRB(xIn, 0, xOut, size.height),
-      Paint()..color = Colors.purpleAccent.withOpacity(0.08),
+      Paint()..color = const Color(0xFF7297B5).withOpacity(0.08),
     );
     canvas.drawLine(
       Offset(xIn, 0),
       Offset(xIn, size.height),
       Paint()
-        ..color = Colors.purpleAccent
+        ..color = const Color(0xFF7297B5)
         ..strokeWidth = 2,
     );
     canvas.drawLine(
       Offset(xOut, 0),
       Offset(xOut, size.height),
       Paint()
-        ..color = Colors.blueAccent
+        ..color = const Color(0xFF78B6D8)
         ..strokeWidth = 2,
     );
   }
