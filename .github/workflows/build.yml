@@ -1,5 +1,5 @@
 
-name: Compilar Sampler Perreo
+name: Compilar DANPAD
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - main
       - master
       - sampler-perreo-windows
+      - danpad
   workflow_dispatch:
 
 jobs:
@@ -36,11 +37,11 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar Sampler Perreo
+      - name: Compilar DANPAD
         run: flutter build windows --release
 
       - name: Guardar aplicacion compilada
         uses: actions/upload-artifact@v4
         with:
-          name: Sampler-Perreo-Windows
+          name: DANPAD-Windows
           path: build/windows/x64/runner/Release/
