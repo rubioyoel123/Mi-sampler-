@@ -26,13 +26,13 @@ class SamplerPerreoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sampler Perreo',
+      title: 'DANPAD',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF101016),
+        scaffoldBackgroundColor: const Color(0xFF0B1118),
         colorScheme: const ColorScheme.dark(
-          primary: Colors.deepPurpleAccent,
-          secondary: Colors.cyanAccent,
+          primary: Colors.lightBlueAccent,
+          secondary: Colors.lightBlueAccent,
         ),
       ),
       home: const SamplerHome(),
@@ -1491,10 +1491,10 @@ class _SamplerHomeState extends State<SamplerHome> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
-            'SAMPLER PERREO',
+            'DANPAD',
             style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
           ),
-          backgroundColor: const Color(0xFF191923),
+          backgroundColor: const Color(0xFF111B26),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 8, top: 4),
@@ -1516,7 +1516,7 @@ class _SamplerHomeState extends State<SamplerHome> {
               icon: const Icon(Icons.stop_circle, color: Colors.redAccent),
             ),
             PopupMenuButton<String>(
-              tooltip: 'Menú de Sampler Perreo',
+              tooltip: 'Menú de DANPAD',
               color: const Color(0xFF171D29),
               icon: const Icon(Icons.menu, color: Colors.cyanAccent),
               onSelected: (choice) {
