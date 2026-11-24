@@ -1,4 +1,3 @@
-
 name: Compilar DANPAD
 
 on:
@@ -11,7 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
+    name: Compilar DANPAD para Windows
     runs-on: windows-latest
 
     steps:
@@ -45,3 +45,32 @@ jobs:
         with:
           name: DANPAD-Windows
           path: build/windows/x64/runner/Release/
+
+  build-android:
+    name: Compilar DANPAD para Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Crear archivos de Android
+        run: flutter create --platforms=android .
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Compilar APK
+        run: flutter build apk --release
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DANPAD-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
